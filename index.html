@@ -194,8 +194,10 @@
           <input type="text" id="plan-name" placeholder="만들 음식 (예: 된장찌개)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
           <input type="url" id="plan-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
           <div>
-            <label class="block text-[11px] font-bold text-gray-500 mb-1">냉장고에서 재료 고르기</label>
-            <div id="plan-fridge-picker" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar"></div>
+            <button type="button" onclick="toggleFridgePickerSection('plan')" class="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-sky-600">
+              <span id="plan-fridge-picker-arrow">&gt;</span> 냉장고에서 재료 고르기
+            </button>
+            <div id="plan-fridge-picker" class="hidden flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar mt-1.5"></div>
           </div>
           <div class="flex gap-2">
             <input type="text" id="plan-tag-input" placeholder="재료 직접 입력 후 Enter (장볼 재료 등)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPlanIngredient();}" class="flex-1 text-xs px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
@@ -214,8 +216,10 @@
           <input type="url" id="log-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
           <div class="flex items-center gap-1" id="log-star-input"></div>
           <div>
-            <label class="block text-[11px] font-bold text-gray-500 mb-1">냉장고에서 재료 고르기</label>
-            <div id="log-fridge-picker" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar"></div>
+            <button type="button" onclick="toggleFridgePickerSection('log')" class="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-emerald-600">
+              <span id="log-fridge-picker-arrow">&gt;</span> 냉장고에서 재료 고르기
+            </button>
+            <div id="log-fridge-picker" class="hidden flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar mt-1.5"></div>
           </div>
           <div class="flex gap-2">
             <input type="text" id="log-tag-input" placeholder="주재료 태그 입력 후 Enter (예: 돼지고기)" onkeydown="if(event.key==='Enter'){event.preventDefault();addLogTag();}" class="flex-1 text-xs px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
@@ -1065,8 +1069,21 @@
         logRating = 0; logTags = [];
         renderStarInput();
         renderLogFridgePicker();
+        collapseFridgePickerSection('log');
         renderLogTagChips();
       }
+    }
+
+    function toggleFridgePickerSection(kind) {
+      const wrap = document.getElementById(`${kind}-fridge-picker`);
+      const arrow = document.getElementById(`${kind}-fridge-picker-arrow`);
+      wrap.classList.toggle('hidden');
+      arrow.textContent = wrap.classList.contains('hidden') ? '>' : '⌄';
+    }
+
+    function collapseFridgePickerSection(kind) {
+      document.getElementById(`${kind}-fridge-picker`).classList.add('hidden');
+      document.getElementById(`${kind}-fridge-picker-arrow`).textContent = '>';
     }
 
     function renderLogFridgePicker() {
@@ -1146,12 +1163,12 @@
       logTags = [...(entry.tags || [])];
       renderStarInput();
       renderLogFridgePicker();
+      collapseFridgePickerSection('log');
       renderLogTagChips();
       document.getElementById('btn-submit-log').innerText = '수정 완료';
     }
 
     function deleteCookLog(id) {
-      if (!confirm('이 집밥 기록을 삭제할까요?')) return;
       cookLogs = cookLogs.filter(l => l.id !== id);
       saveLogs();
       renderCalendar();
@@ -1252,6 +1269,7 @@
         document.getElementById('plan-memo').value = '';
         planIngredients = [];
         renderPlanFridgePicker();
+        collapseFridgePickerSection('plan');
         renderPlanIngredientChips();
       }
     }
@@ -1328,12 +1346,12 @@
       document.getElementById('plan-memo').value = plan.memo || '';
       planIngredients = [...(plan.ingredients || [])];
       renderPlanFridgePicker();
+      collapseFridgePickerSection('plan');
       renderPlanIngredientChips();
       document.getElementById('btn-submit-plan').innerText = '수정 완료';
     }
 
     function deleteMealPlan(id) {
-      if (!confirm('이 계획을 삭제할까요?')) return;
       mealPlans = mealPlans.filter(p => p.id !== id);
       saveMealPlans();
       delete executeState[id];
@@ -1412,11 +1430,8 @@
         return `
         <div class="bg-sky-50/60 border border-sky-100 rounded-xl p-3 space-y-1.5">
           <div class="flex items-start justify-between">
-            <div class="font-bold text-sm text-gray-800">${escapeHtml(p.name)}</div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button onclick="editMealPlan('${p.id}')" class="text-gray-300 hover:text-sky-600 text-xs px-1">✏️</button>
-              <button onclick="deleteMealPlan('${p.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
-            </div>
+            <div class="font-bold text-sm text-gray-800 cursor-pointer hover:text-sky-600 hover:underline" onclick="editMealPlan('${p.id}')">${escapeHtml(p.name)}</div>
+            <button onclick="deleteMealPlan('${p.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1 shrink-0">✕</button>
           </div>
           ${p.ingredients.length ? `<div class="flex flex-wrap gap-1">${p.ingredients.map(t => `<span class="text-[10px] bg-white text-sky-600 border border-sky-200 px-1.5 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           ${p.link ? `<a href="${escapeAttr(p.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-sky-600 underline">🔗 레시피 보기</a>` : ''}
@@ -1463,14 +1478,11 @@
       list.innerHTML = entries.map(e => `
         <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-1.5">
           <div class="flex items-start justify-between">
-            <div>
-              <div class="font-bold text-sm text-gray-800">${escapeHtml(e.name)}</div>
+            <div class="min-w-0">
+              <div class="font-bold text-sm text-gray-800 cursor-pointer hover:text-emerald-600 hover:underline" onclick="editCookLog('${e.id}')">${escapeHtml(e.name)}</div>
               <div class="text-xs">${renderStars(e.rating)}</div>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button onclick="editCookLog('${e.id}')" class="text-gray-300 hover:text-emerald-600 text-xs px-1">✏️</button>
-              <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
-            </div>
+            <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1 shrink-0">✕</button>
           </div>
           ${e.tags && e.tags.length ? `<div class="flex flex-wrap gap-1">${e.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           ${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
