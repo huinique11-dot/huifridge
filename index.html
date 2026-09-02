@@ -111,7 +111,16 @@
             <select id="manual-category" class="text-xs px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300"></select>
             <select id="manual-location" class="text-xs px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300"></select>
           </div>
-          <input type="date" id="manual-expiry" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-0.5">만든 날짜 (직접 만든 음식)</label>
+              <input type="date" id="manual-made-date" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-0.5">소비기한</label>
+              <input type="date" id="manual-expiry" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+            </div>
+          </div>
         </div>
         <button onclick="addManualItem()" class="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold py-2.5 rounded-xl transition active:scale-95">+ 냉장고에 추가</button>
       </section>
@@ -759,11 +768,13 @@
       const name = nameInput.value.trim();
       const category = document.getElementById('manual-category').value;
       const location = document.getElementById('manual-location').value;
+      const madeDate = document.getElementById('manual-made-date').value;
       const expiry = document.getElementById('manual-expiry').value;
       if (!name) { showToast('품목명을 입력해주세요.'); return; }
-      fridgeItems.push({ id: uid(), name, category, location, expiry, addedAt: toISODate(new Date()), checked: false });
+      fridgeItems.push({ id: uid(), name, category, location, madeDate, expiry, addedAt: toISODate(new Date()), checked: false });
       saveFridge();
       nameInput.value = '';
+      document.getElementById('manual-made-date').value = '';
       document.getElementById('manual-expiry').value = '';
       renderFridgeList();
       showToast(`'${name}' 추가되었어요! 🥗`);
@@ -779,6 +790,13 @@
       if (days <= 3) return { label: `D-${days}`, cls: 'bg-orange-100 text-orange-600', days };
       if (days <= 7) return { label: `D-${days}`, cls: 'bg-amber-100 text-amber-600', days };
       return { label: `D-${days}`, cls: 'bg-emerald-100 text-emerald-600', days };
+    }
+
+    function daysSince(dateStr) {
+      if (!dateStr) return null;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const made = new Date(dateStr + 'T00:00:00');
+      return Math.round((today - made) / 86400000);
     }
 
     function renderFridgeList() {
@@ -811,7 +829,15 @@
               <select onchange="updateItemField('${item.id}','location',this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500">
                 ${storageLocations.map(l => `<option value="${l.id}" ${l.id === item.location ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
               </select>
-              <input type="date" value="${item.expiry || ''}" onchange="updateExpiry('${item.id}', this.value)" class="text-[10px] text-gray-400 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
+              <span class="flex items-center gap-1">
+                <span class="text-[9px] text-gray-400 shrink-0">만든날</span>
+                <input type="date" value="${item.madeDate || ''}" onchange="updateItemField('${item.id}','madeDate',this.value)" class="text-[10px] text-gray-500 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
+                ${item.madeDate ? `<span class="text-[9px] text-gray-400 shrink-0">${daysSince(item.madeDate)}일째</span>` : ''}
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="text-[9px] text-gray-400 shrink-0">기한</span>
+                <input type="date" value="${item.expiry || ''}" onchange="updateExpiry('${item.id}', this.value)" class="text-[10px] text-gray-400 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
+              </span>
             </div>
           </div>`;
         }).join('');
