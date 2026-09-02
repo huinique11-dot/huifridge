@@ -866,14 +866,14 @@
         '매장', '주소', '품명', '수량', '단가', '금액', '바코드', '고객', '거래', '일시', '번호', 'NO.', '결제',
         '잔액', '방문', '감사', '환영', '판매자', '통신판매', '교환', '환불', '영업시간', 'WWW', 'HTTP',
         '거래구분', '승인금액', '카드번호', '승인번호', '할부',
-        '주문내역', '주문한 상품', '배송·주문', '배송완료', '배송관리', '바로구매', '장바구니', '곧 품절',
+        '주문내역', '주문한 상품', '배송·주문', '배송완료', '배송관리', '바로구매', '장바구니', '품절',
         '로켓프레시', '로켓배송', '오늘(', '내일(', '도착', '문앞'];
 
       const addressPattern = /(특별시|광역시|[가-힣]{1,4}(시|군|구|동|읍|면|로|길))\s*\d/;
       const phonePattern = /\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}/;
-      // requires comma-grouping or a 원 suffix — a bare trailing number alone
-      // is too likely to be part of a product name/size (e.g. "180MLX10")
-      const priceAtEnd = /((\d{1,3}(,\d{3})+)|(\d+\s*원))\s*T?\s*$/i;
+      // requires comma/period-grouping, a 원 suffix, or a bare 4+ digit run —
+      // OCR on small screenshots often drops the comma and/or 원 entirely
+      const priceAtEnd = /((\d{1,3}([,.]\d{3})+)|(\d+\s*원)|(\d{4,}))\s*T?\s*$/i;
       // common non-food household items that show up on the same mart receipts
       const nonFoodKeywords = ['휴지', '물티슈', '비닐봉투', '봉투', '세제', '섬유유연제', '수세미', '칫솔', '치약',
         '샴푸', '린스', '바디워시', '마스크', '건전지', '쓰레기봉투', '종이컵', '호일', '랩', '장갑', '기저귀',
@@ -894,15 +894,22 @@
 
       // A "detail line" carries no real product-name text of its own — once
       // digits, punctuation, and common unit/tax tokens are stripped out,
-      // nothing is left. Matches both "바코드 수량 단가 금액 T" (mart/Costco
-      // style) and "22,690 원 · 1개" (Coupang/shopping-app order history).
+      // little to nothing is left. Matches "바코드 수량 단가 금액 T"
+      // (mart/Costco style) and "22,690 원 · 1개" (Coupang/shopping-app order
+      // history) — including when OCR mangles them, e.g. "1개" misread as
+      // "17H", the middle dot misread as "ㆍ", or a stray 1-2 char artifact
+      // (an icon or margin mark) left over. A leftover Korean word, though,
+      // means this is probably a second real product line, not a price row.
       function isDetailLine(line) {
-        if (!/\d/.test(line)) return false;
+        const digitCount = (line.match(/\d/g) || []).length;
+        if (digitCount < 3) return false;
         const stripped = line
+          .replace(/\d*7H/gi, '') // common OCR misread of "N개"
           .replace(/[\d,.\s]/g, '')
-          .replace(/[·•\-–—~*#]/g, '')
-          .replace(/원|개입|개|EA|ea|kg|KG|g|T|판|팩|봉|병|캔|매|L|ml|ML/g, '');
-        return stripped.length === 0;
+          .replace(/[·•ㆍ"'""''`|\-–—~*#]/g, '')
+          .replace(/원|개입|개|EA|ea|kg|KG|g|T|판|팩|봉|병|캔|매|L|ml|ML/gi, '');
+        if (/[가-힣]/.test(stripped)) return false;
+        return stripped.length <= 3;
       }
 
       lines.forEach((line, idx) => {
@@ -928,6 +935,7 @@
           .replace(/[*#=~\-_]{2,}/g, '')
           .replace(/[.…]{2,}\s*$/, '') // trailing "..." from a truncated product title
           .replace(/,\s*$/, '')
+          .replace(/^["'""''`|<>.\s]+/, '') // stray OCR-garbage prefix (icons/margins misread as punctuation)
           .trim();
 
         if (!/[가-힣a-zA-Z]/.test(cleaned)) return;
