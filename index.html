@@ -268,6 +268,14 @@
           <input type="text" id="log-name" placeholder="요리명 (예: 김치찌개)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
           <input type="url" id="log-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
           <div class="flex items-center gap-1" id="log-star-input"></div>
+          <div class="flex items-center gap-2">
+            <input type="file" accept="image/*" id="log-photo-input" onchange="handleLogPhotoSelect(event)" class="hidden">
+            <label for="log-photo-input" class="text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-xl cursor-pointer transition">📷 사진 추가 (선택)</label>
+            <div id="log-photo-preview" class="hidden flex items-center gap-1.5">
+              <img id="log-photo-preview-img" class="w-10 h-10 rounded-lg object-cover border border-emerald-200">
+              <button type="button" onclick="removeLogPhoto()" class="text-gray-300 hover:text-red-500 text-xs">✕</button>
+            </div>
+          </div>
           <div>
             <button type="button" onclick="toggleFridgePickerSection('log')" class="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-emerald-600">
               <span id="log-fridge-picker-arrow">&gt;</span> 냉장고에서 재료 고르기
@@ -1226,6 +1234,37 @@
     let selectedDate = toISODate(new Date());
     let logRating = 0;
     let logTags = [];
+    let logPhoto = null;
+
+    async function handleLogPhotoSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        logPhoto = await compressImageFile(file);
+        renderLogPhotoPreview();
+      } catch (err) {
+        showToast('사진을 불러오지 못했어요.');
+      }
+    }
+
+    function removeLogPhoto() {
+      logPhoto = null;
+      const input = document.getElementById('log-photo-input');
+      if (input) input.value = '';
+      renderLogPhotoPreview();
+    }
+
+    function renderLogPhotoPreview() {
+      const wrap = document.getElementById('log-photo-preview');
+      const img = document.getElementById('log-photo-preview-img');
+      if (!wrap || !img) return;
+      if (logPhoto) {
+        img.src = logPhoto;
+        wrap.classList.remove('hidden');
+      } else {
+        wrap.classList.add('hidden');
+      }
+    }
 
     function changeMonth(delta) {
       currentMonth.setMonth(currentMonth.getMonth() + delta);
@@ -1246,17 +1285,21 @@
         const dateStr = `${year}-${pad(month + 1)}-${pad(d)}`;
         const entries = cookLogs.filter(l => l.date === dateStr);
         const plans = mealPlans.filter(p => p.date === dateStr);
+        const photoEntry = entries.find(e => e.photo);
         const isToday = dateStr === todayStr;
         const isSelected = dateStr === selectedDate;
         let base = "aspect-square flex flex-col items-center justify-center rounded-xl text-xs cursor-pointer transition relative ";
         if (isSelected) base += "bg-emerald-500 text-white font-bold shadow-sm";
         else if (isToday) base += "bg-emerald-50 text-emerald-700 font-bold border border-emerald-300";
         else base += "hover:bg-emerald-50 text-gray-600";
+        const logMark = photoEntry
+          ? `<img src="${photoEntry.photo}" class="w-3.5 h-3.5 rounded-full object-cover border ${isSelected ? 'border-white' : 'border-emerald-400'}">`
+          : (entries.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}"></span>` : '');
         cells += `
           <div class="${base}" onclick="selectDay('${dateStr}')">
             <span>${d}</span>
-            <div class="flex items-center gap-0.5 h-1.5 mt-0.5">
-              ${entries.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}"></span>` : ''}
+            <div class="flex items-center justify-center gap-0.5 h-3.5 mt-0.5">
+              ${logMark}
               ${plans.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full border ${isSelected ? 'border-white' : 'border-sky-400'}"></span>` : ''}
             </div>
           </div>`;
@@ -1283,7 +1326,9 @@
         document.getElementById('log-name').value = '';
         document.getElementById('log-link').value = '';
         document.getElementById('log-memo').value = '';
-        logRating = 0; logTags = [];
+        logRating = 0; logTags = []; logPhoto = null;
+        clearInput('log-photo-input');
+        renderLogPhotoPreview();
         renderStarInput();
         renderLogFridgePicker();
         collapseFridgePickerSection('log');
@@ -1353,11 +1398,11 @@
       if (!name) { showToast('요리명을 입력해주세요.'); return; }
       if (editingLogId) {
         const entry = cookLogs.find(l => l.id === editingLogId);
-        if (entry) { entry.name = name; entry.link = link; entry.rating = logRating; entry.tags = [...logTags]; entry.memo = memo; }
+        if (entry) { entry.name = name; entry.link = link; entry.rating = logRating; entry.tags = [...logTags]; entry.memo = memo; entry.photo = logPhoto; }
         editingLogId = null;
         showToast(`'${name}' 기록을 수정했어요! ✏️`);
       } else {
-        cookLogs.push({ id: uid(), date: selectedDate, name, link, rating: logRating, tags: [...logTags], memo, comments: [] });
+        cookLogs.push({ id: uid(), date: selectedDate, name, link, rating: logRating, tags: [...logTags], memo, photo: logPhoto, comments: [] });
         showToast(`'${name}' 기록을 저장했어요! 🍚`);
       }
       saveLogs();
@@ -1378,6 +1423,9 @@
       document.getElementById('log-memo').value = entry.memo || '';
       logRating = entry.rating || 0;
       logTags = [...(entry.tags || [])];
+      logPhoto = entry.photo || null;
+      clearInput('log-photo-input');
+      renderLogPhotoPreview();
       renderStarInput();
       renderLogFridgePicker();
       collapseFridgePickerSection('log');
@@ -1601,12 +1649,27 @@
       renderExecuteStars(id);
     }
 
+    async function handleExecutePhotoSelect(event, id) {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await compressImageFile(file);
+        executeState[id] = executeState[id] || {};
+        executeState[id].photo = dataUrl;
+        const img = document.getElementById(`execute-photo-preview-${id}`);
+        if (img) { img.src = dataUrl; img.classList.remove('hidden'); }
+      } catch (err) {
+        showToast('사진을 불러오지 못했어요.');
+      }
+    }
+
     function confirmExecutePlan(id) {
       const plan = mealPlans.find(p => p.id === id);
       if (!plan) return;
       const dateInput = document.getElementById(`execute-date-${id}`);
       const date = (dateInput && dateInput.value) || plan.date;
       const rating = (executeState[id] && executeState[id].rating) || 0;
+      const photo = (executeState[id] && executeState[id].photo) || null;
 
       const consumeIds = [];
       plan.ingredients.forEach((ing, idx) => {
@@ -1614,7 +1677,7 @@
         if (cb && cb.checked && cb.dataset.fridgeId) consumeIds.push(cb.dataset.fridgeId);
       });
 
-      cookLogs.push({ id: uid(), date, name: plan.name, link: plan.link || '', rating, tags: [...plan.ingredients], memo: plan.memo || '' });
+      cookLogs.push({ id: uid(), date, name: plan.name, link: plan.link || '', rating, tags: [...plan.ingredients], memo: plan.memo || '', photo, comments: [] });
       saveLogs();
 
       if (consumeIds.length) {
@@ -1663,6 +1726,11 @@
               <span class="text-[11px] text-gray-500 shrink-0">별점</span>
               <div class="flex items-center gap-0.5" id="execute-star-input-${p.id}"></div>
             </div>
+            <div class="flex items-center gap-2">
+              <input type="file" accept="image/*" id="execute-photo-input-${p.id}" onchange="handleExecutePhotoSelect(event, '${p.id}')" class="hidden">
+              <label for="execute-photo-input-${p.id}" class="text-[11px] font-bold bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg cursor-pointer">📷 사진 추가</label>
+              <img id="execute-photo-preview-${p.id}" class="hidden w-9 h-9 rounded-lg object-cover border border-emerald-200">
+            </div>
             ${hasFridgeMatch ? `
             <div>
               <span class="text-[11px] text-gray-500">냉장고에서 뺄 재료</span>
@@ -1694,12 +1762,15 @@
       }
       list.innerHTML = entries.map(e => `
         <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-1.5">
-          <div class="flex items-start justify-between">
+          <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="font-bold text-sm text-gray-800 cursor-pointer hover:text-emerald-600 hover:underline" onclick="editCookLog('${e.id}')">${escapeHtml(e.name)}</div>
               <div class="text-xs">${renderStars(e.rating)}</div>
             </div>
-            <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1 shrink-0">✕</button>
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${e.photo ? `<img src="${e.photo}" class="w-12 h-12 rounded-lg object-cover border border-emerald-200">` : ''}
+              <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+            </div>
           </div>
           ${e.tags && e.tags.length ? `<div class="flex flex-wrap gap-1">${e.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           ${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
@@ -1724,13 +1795,13 @@
       cookLogs.forEach(l => {
         const key = l.name.trim().toLowerCase();
         if (!map.has(key)) {
-          map.set(key, { name: l.name.trim(), ratings: [], tags: new Set(), link: l.link, lastDate: l.date, count: 0 });
+          map.set(key, { name: l.name.trim(), ratings: [], tags: new Set(), link: l.link, photo: l.photo || null, lastDate: l.date, count: 0 });
         }
         const entry = map.get(key);
         entry.ratings.push(l.rating || 0);
         (l.tags || []).forEach(t => entry.tags.add(t));
         entry.count++;
-        if (l.date >= entry.lastDate) { entry.lastDate = l.date; if (l.link) entry.link = l.link; }
+        if (l.date >= entry.lastDate) { entry.lastDate = l.date; if (l.link) entry.link = l.link; if (l.photo) entry.photo = l.photo; }
       });
       return Array.from(map.values()).map(e => ({
         ...e,
@@ -1826,11 +1897,12 @@
 
       list.innerHTML = filtered.map(m => `
         <div class="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-3 space-y-1.5">
-          <div class="flex items-start justify-between">
-            <div>
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
               <div class="font-bold text-sm text-gray-800">${escapeHtml(m.name)}</div>
               <div class="text-xs">${renderStars(Math.round(m.avgRating))} <span class="text-gray-400 text-[10px]">(${m.avgRating.toFixed(1)} · ${m.count}회 조리)</span></div>
             </div>
+            ${m.photo ? `<img src="${m.photo}" class="w-12 h-12 rounded-xl object-cover border border-emerald-200 shrink-0">` : ''}
           </div>
           ${m.tags.length ? `<div class="flex flex-wrap gap-1">${m.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           <div class="flex items-center justify-between pt-0.5">
@@ -1887,6 +1959,31 @@
     function clearInput(id) {
       const el = document.getElementById(id);
       if (el) el.value = '';
+    }
+
+    // Downscale + recompress to a tiny JPEG data URL — the photo is only ever
+    // shown as a small thumbnail, so full resolution would just waste space
+    // (localStorage and each Firestore family-sync document have real limits).
+    function compressImageFile(file, maxDim = 160, quality = 0.6) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w >= h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else if (h > w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = () => reject(new Error('이미지를 읽을 수 없어요.'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('파일을 읽을 수 없어요.'));
+        reader.readAsDataURL(file);
+      });
     }
 
     function toggleGuide(key) {
