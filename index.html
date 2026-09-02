@@ -250,6 +250,10 @@
         <div id="add-plan-form" class="hidden space-y-2 mb-4 bg-sky-50/60 p-3 rounded-2xl border border-sky-100">
           <p class="text-[11px] font-bold text-sky-600">📝 무슨 재료로 무슨 음식을 만들지 미리 계획해두세요</p>
           <input type="text" id="plan-name" placeholder="만들 음식 (예: 된장찌개)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
+          <div>
+            <label class="block text-[10px] text-gray-400 mb-0.5">계획할 날짜</label>
+            <input type="date" id="plan-date" class="w-full text-xs px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
+          </div>
           <input type="url" id="plan-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
           <div>
             <button type="button" onclick="toggleFridgePickerSection('plan')" class="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-sky-600">
@@ -1236,18 +1240,23 @@
     function sendCheckedShoppingToFridge() {
       const checked = shoppingList.filter(i => i.checked);
       if (checked.length === 0) return;
-      pendingItems = checked.map(i => ({
-        tempId: uid(),
-        name: i.name,
-        category: i.category || autoClassifyCategory(i.name),
-        location: storageLocations[0]?.id || '',
-        expiry: ''
-      }));
+      checked.forEach(i => {
+        fridgeItems.push({
+          id: uid(),
+          name: i.name,
+          category: i.category || autoClassifyCategory(i.name),
+          location: storageLocations[0]?.id || '',
+          madeDate: '',
+          expiry: '',
+          addedAt: toISODate(new Date()),
+          checked: false
+        });
+      });
+      saveFridge();
       shoppingList = shoppingList.filter(i => !i.checked);
       saveShopping();
-      switchTab('fridge');
-      renderPendingReview();
-      showToast(`${checked.length}개 품목을 확인 후 냉장고에 담아주세요 ✅`);
+      renderShoppingList();
+      showToast(`${checked.length}개 품목을 냉장고에 담았어요! 🧊`);
     }
 
     /* ===================== 집밥로그 (calendar) ===================== */
@@ -1551,6 +1560,7 @@
         editingPlanId = null;
         document.getElementById('btn-submit-plan').innerText = '계획 저장';
         document.getElementById('plan-name').value = '';
+        document.getElementById('plan-date').value = selectedDate;
         document.getElementById('plan-link').value = '';
         document.getElementById('plan-memo').value = '';
         planIngredients = [];
@@ -1602,23 +1612,28 @@
 
     function submitMealPlan() {
       const name = document.getElementById('plan-name').value.trim();
+      const date = document.getElementById('plan-date').value || selectedDate;
       const link = document.getElementById('plan-link').value.trim();
       const memo = document.getElementById('plan-memo').value.trim();
       if (!name) { showToast('만들 음식 이름을 입력해주세요.'); return; }
       if (editingPlanId) {
         const plan = mealPlans.find(p => p.id === editingPlanId);
-        if (plan) { plan.name = name; plan.link = link; plan.ingredients = [...planIngredients]; plan.memo = memo; }
+        if (plan) { plan.name = name; plan.date = date; plan.link = link; plan.ingredients = [...planIngredients]; plan.memo = memo; }
         editingPlanId = null;
         showToast(`'${name}' 계획을 수정했어요! ✏️`);
       } else {
-        mealPlans.push({ id: uid(), date: selectedDate, name, link, ingredients: [...planIngredients], memo, createdAt: toISODate(new Date()), comments: [] });
-        showToast(`'${name}' 요리 계획을 저장했어요! 📝`);
+        mealPlans.push({ id: uid(), date, name, link, ingredients: [...planIngredients], memo, createdAt: toISODate(new Date()), comments: [] });
+        const [y, m, d] = date.split('-');
+        showToast(`${Number(m)}월 ${Number(d)}일로 '${name}' 계획을 저장했어요! 📝`);
       }
       saveMealPlans();
+      selectedDate = date;
+      currentMonth = new Date(date + 'T00:00:00'); currentMonth.setDate(1);
       document.getElementById('add-plan-form').classList.add('hidden');
       document.getElementById('btn-submit-plan').innerText = '계획 저장';
       renderCalendar();
       renderDayDetailPlans();
+      renderDayDetail();
     }
 
     function editMealPlan(id) {
@@ -1628,6 +1643,7 @@
       document.getElementById('add-log-form').classList.add('hidden');
       document.getElementById('add-plan-form').classList.remove('hidden');
       document.getElementById('plan-name').value = plan.name;
+      document.getElementById('plan-date').value = plan.date;
       document.getElementById('plan-link').value = plan.link || '';
       document.getElementById('plan-memo').value = plan.memo || '';
       planIngredients = [...(plan.ingredients || [])];
@@ -1855,20 +1871,20 @@
     function quickPlanFromMenu(name) {
       const menu = aggregateMenu().find(m => m.name === name);
       if (!menu) return;
-      selectedDate = toISODate(new Date());
       switchTab('log');
       document.getElementById('add-log-form').classList.add('hidden');
       document.getElementById('add-plan-form').classList.remove('hidden');
       editingPlanId = null;
       document.getElementById('btn-submit-plan').innerText = '계획 저장';
       document.getElementById('plan-name').value = menu.name;
+      document.getElementById('plan-date').value = selectedDate;
       document.getElementById('plan-link').value = menu.link || '';
       document.getElementById('plan-memo').value = '';
       planIngredients = [...menu.tags];
       renderPlanFridgePicker();
       collapseFridgePickerSection('plan');
       renderPlanIngredientChips();
-      showToast(`오늘 날짜로 '${menu.name}' 계획을 준비했어요. 다른 날짜로 하려면 캘린더에서 날짜를 먼저 바꿔주세요.`);
+      showToast(`'${menu.name}' 계획을 준비했어요. 날짜를 골라서 저장해주세요! 📅`);
     }
 
     function renderMenuBoard() {
