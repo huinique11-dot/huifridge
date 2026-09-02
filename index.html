@@ -270,6 +270,13 @@
       <label class="block text-xs font-bold text-gray-500 mb-1">내 이름 (댓글에 표시돼요)</label>
       <input type="text" id="my-nickname" placeholder="예: 엄마, 아빠, 첫째" onchange="saveNickname(this.value)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 mb-4">
 
+      <div id="home-screen-box" class="bg-sky-50/60 border border-sky-100 rounded-2xl p-3 mb-4">
+        <p class="text-xs font-bold text-sky-700 mb-2">📱 홈 화면에 추가하기</p>
+        <p id="home-screen-status" class="hidden text-[11px] text-emerald-600 font-semibold mb-1">✅ 이미 홈 화면 앱으로 실행 중이에요!</p>
+        <button id="btn-home-screen" onclick="handleAddToHomeScreen()" class="w-full text-sm font-bold bg-sky-500 hover:bg-sky-600 text-white py-2.5 rounded-xl transition active:scale-95">홈 화면에 추가하기</button>
+        <div id="home-screen-manual" class="hidden mt-2.5 text-[11px] text-gray-600 space-y-1 leading-relaxed"></div>
+      </div>
+
       <div class="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3 text-[11px] text-gray-600 space-y-1.5 mb-4 leading-relaxed">
         <p class="font-bold text-emerald-700">처음 한 번만 설정하면 가족 모두 실시간으로 공유돼요</p>
         <p>1. firebase.google.com 에서 무료 프로젝트를 만드세요.</p>
@@ -477,6 +484,8 @@
         document.getElementById('firebase-config-input').value = familySyncConfig ? JSON.stringify(familySyncConfig.firebaseConfig, null, 2) : '';
         document.getElementById('family-group-id').value = familySyncConfig ? familySyncConfig.groupId : '';
         updateSyncStatusUI(!!fsDb);
+        document.getElementById('home-screen-manual').classList.add('hidden');
+        updateHomeScreenBox();
       }
     }
 
@@ -496,6 +505,85 @@
         return name;
       }
       return '가족';
+    }
+
+    /* ===================== 홈 화면에 추가하기 ===================== */
+    let deferredInstallPrompt = null;
+
+    function isKakaoInApp() { return /KAKAOTALK/i.test(navigator.userAgent); }
+    function isNaverInApp() { return /NAVER\(inapp/i.test(navigator.userAgent); }
+    function isLineInApp() { return /Line\//i.test(navigator.userAgent) && /iab/i.test(navigator.userAgent); }
+    function isInAppBrowser() { return isKakaoInApp() || isNaverInApp() || isLineInApp(); }
+    function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+    function isStandaloneMode() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      updateHomeScreenBox();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      updateHomeScreenBox();
+    });
+
+    function updateHomeScreenBox() {
+      const statusEl = document.getElementById('home-screen-status');
+      const btn = document.getElementById('btn-home-screen');
+      const manual = document.getElementById('home-screen-manual');
+      if (!statusEl || !btn) return;
+
+      if (isStandaloneMode()) {
+        statusEl.classList.remove('hidden');
+        btn.classList.add('hidden');
+        manual.classList.add('hidden');
+        return;
+      }
+      statusEl.classList.add('hidden');
+      btn.classList.remove('hidden');
+
+      if (isKakaoInApp()) {
+        btn.innerText = '🔗 다른 브라우저로 열기';
+      } else if (deferredInstallPrompt) {
+        btn.innerText = '📲 홈 화면에 추가하기';
+      } else {
+        btn.innerText = '📖 추가 방법 보기';
+      }
+    }
+
+    async function handleAddToHomeScreen() {
+      if (isKakaoInApp()) {
+        location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href);
+        return;
+      }
+      if (isInAppBrowser() && !isKakaoInApp()) {
+        showManualHomeScreenInstructions();
+        showToast('앱 우측 상단(⋮ 또는 공유) 메뉴에서 "다른 브라우저로 열기"를 먼저 눌러주세요.');
+        return;
+      }
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        updateHomeScreenBox();
+        return;
+      }
+      showManualHomeScreenInstructions();
+    }
+
+    function showManualHomeScreenInstructions() {
+      const manual = document.getElementById('home-screen-manual');
+      const steps = isIOS()
+        ? ['📱 <b>아이폰(사파리)</b>', '화면 아래 공유 버튼(⬆️) 탭 → 아래로 스크롤 → "홈 화면에 추가" 탭']
+        : ['📱 <b>안드로이드(크롬)</b>', '오른쪽 위 점 세 개(⋮) 탭 → "홈 화면에 추가" 또는 "앱 설치" 탭'];
+      manual.innerHTML = `
+        <p class="font-bold text-gray-700">${steps[0]}</p>
+        <p>${steps[1]}</p>
+        <p class="pt-1 text-gray-400">카톡/네이버/라인 등에서 열었다면, 먼저 우측 상단 메뉴에서 "다른 브라우저로 열기"를 눌러 사파리나 크롬으로 넘어간 뒤 위 순서를 따라주세요.</p>
+      `;
+      manual.classList.remove('hidden');
     }
 
     function updateSyncStatusUI(connected) {
