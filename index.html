@@ -213,6 +213,10 @@
           <input type="text" id="log-name" placeholder="요리명 (예: 김치찌개)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
           <input type="url" id="log-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
           <div class="flex items-center gap-1" id="log-star-input"></div>
+          <div>
+            <label class="block text-[11px] font-bold text-gray-500 mb-1">냉장고에서 재료 고르기</label>
+            <div id="log-fridge-picker" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar"></div>
+          </div>
           <div class="flex gap-2">
             <input type="text" id="log-tag-input" placeholder="주재료 태그 입력 후 Enter (예: 돼지고기)" onkeydown="if(event.key==='Enter'){event.preventDefault();addLogTag();}" class="flex-1 text-xs px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
             <button onclick="addLogTag()" class="text-xs font-bold bg-emerald-100 text-emerald-700 px-3 rounded-xl">추가</button>
@@ -1036,8 +1040,25 @@
         document.getElementById('log-memo').value = '';
         logRating = 0; logTags = [];
         renderStarInput();
+        renderLogFridgePicker();
         renderLogTagChips();
       }
+    }
+
+    function renderLogFridgePicker() {
+      const wrap = document.getElementById('log-fridge-picker');
+      if (fridgeItems.length === 0) {
+        wrap.innerHTML = `<span class="text-[11px] text-gray-400">냉장고가 비어있어요.</span>`;
+        return;
+      }
+      wrap.innerHTML = fridgeItems.map(i => `
+        <button type="button" onclick="addLogTagFromFridge('${escapeAttr(i.name)}')" class="text-[11px] font-semibold bg-white border border-emerald-200 text-emerald-600 px-2 py-1 rounded-full hover:bg-emerald-100">+ ${escapeHtml(i.name)}</button>
+      `).join('');
+    }
+
+    function addLogTagFromFridge(name) {
+      if (!logTags.includes(name)) logTags.push(name);
+      renderLogTagChips();
     }
 
     function renderStarInput() {
