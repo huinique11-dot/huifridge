@@ -1612,6 +1612,46 @@
       }));
     }
 
+    function quickLogFromMenu(name) {
+      const menu = aggregateMenu().find(m => m.name === name);
+      if (!menu) return;
+      selectedDate = toISODate(new Date());
+      switchTab('log');
+      document.getElementById('add-plan-form').classList.add('hidden');
+      document.getElementById('add-log-form').classList.remove('hidden');
+      editingLogId = null;
+      document.getElementById('btn-submit-log').innerText = '저장';
+      document.getElementById('log-name').value = menu.name;
+      document.getElementById('log-link').value = menu.link || '';
+      document.getElementById('log-memo').value = '';
+      logRating = 0;
+      logTags = [...menu.tags];
+      renderStarInput();
+      renderLogFridgePicker();
+      collapseFridgePickerSection('log');
+      renderLogTagChips();
+      showToast(`오늘 날짜로 '${menu.name}' 기록을 준비했어요. 별점 남기고 저장해주세요!`);
+    }
+
+    function quickPlanFromMenu(name) {
+      const menu = aggregateMenu().find(m => m.name === name);
+      if (!menu) return;
+      selectedDate = toISODate(new Date());
+      switchTab('log');
+      document.getElementById('add-log-form').classList.add('hidden');
+      document.getElementById('add-plan-form').classList.remove('hidden');
+      editingPlanId = null;
+      document.getElementById('btn-submit-plan').innerText = '계획 저장';
+      document.getElementById('plan-name').value = menu.name;
+      document.getElementById('plan-link').value = menu.link || '';
+      document.getElementById('plan-memo').value = '';
+      planIngredients = [...menu.tags];
+      renderPlanFridgePicker();
+      collapseFridgePickerSection('plan');
+      renderPlanIngredientChips();
+      showToast(`오늘 날짜로 '${menu.name}' 계획을 준비했어요. 다른 날짜로 하려면 캘린더에서 날짜를 먼저 바꿔주세요.`);
+    }
+
     function renderMenuBoard() {
       ['rating', 'name', 'tag'].forEach(m => {
         const btn = document.getElementById(`sort-btn-${m}`);
@@ -1669,6 +1709,10 @@
           <div class="flex items-center justify-between pt-0.5">
             <span class="text-[10px] text-gray-400">최근 조리: ${m.lastDate}</span>
             ${m.link ? `<a href="${escapeAttr(m.link)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
+          </div>
+          <div class="flex gap-1.5 pt-1">
+            <button onclick="quickLogFromMenu('${escapeAttr(m.name)}')" class="flex-1 text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-full transition active:scale-95">🍳 오늘 기록하기</button>
+            <button onclick="quickPlanFromMenu('${escapeAttr(m.name)}')" class="flex-1 text-[11px] font-bold bg-sky-100 hover:bg-sky-200 text-sky-700 py-1.5 rounded-full transition active:scale-95">📝 계획에 추가</button>
           </div>
         </div>
       `).join('');
