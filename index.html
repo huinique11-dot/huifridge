@@ -1,1 +1,1408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>🥬 우리집 냉장고</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+  <!-- Tesseract.js: client-side OCR for receipt scanning -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
+  <style>
+    body {
+      font-family: 'Gowun Dodum', sans-serif;
+      background-color: #f4faf6;
+      background-image: radial-gradient(#d9f2e3 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+    .font-title { font-family: 'Jua', sans-serif; }
+    .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #e6f5eb; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #6ee7b7; border-radius: 10px; }
+    .star-btn { transition: transform 0.1s; }
+    .star-btn:active { transform: scale(1.2); }
+    @keyframes popIn {
+      0% { transform: scale(0.95); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pop-in { animation: popIn 0.2s ease-out forwards; }
+    input[type="date"] { -webkit-appearance: none; }
+  </style>
+</head>
+<body class="min-h-screen text-gray-800 pb-12">
+
+  <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-emerald-200 shadow-sm">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🥬</span>
+        <span class="font-title text-xl text-emerald-700 tracking-wide">우리집 냉장고</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="text-[11px] text-emerald-500 font-semibold" id="header-date"></span>
+        <button onclick="toggleSettingsModal()" class="relative text-lg leading-none" title="가족 공유 설정">
+          ⚙️
+          <span id="sync-dot" class="hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4">
+
+    <div class="flex bg-emerald-100/70 p-1 rounded-2xl mb-4 border border-emerald-200 sticky top-[57px] z-20">
+      <button id="tab-btn-fridge" onclick="switchTab('fridge')" class="flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all">🧊 냉장고</button>
+      <button id="tab-btn-shopping" onclick="switchTab('shopping')" class="flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all">🛒 장보기</button>
+      <button id="tab-btn-log" onclick="switchTab('log')" class="flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all">📅 집밥로그</button>
+      <button id="tab-btn-menu" onclick="switchTab('menu')" class="flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all">📖 메뉴판</button>
+    </div>
+
+    <!-- ===================== VIEW: 냉장고 ===================== -->
+    <div id="view-fridge" class="space-y-4">
+
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <h2 class="font-title text-lg text-emerald-700 mb-2 flex items-center gap-1.5"><span>📷</span> 영수증으로 한번에 담기</h2>
+        <p class="text-xs text-gray-500 mb-3">영수증 사진을 찍거나 앨범에서 선택하면 식품 품목만 자동으로 인식해드려요.</p>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block text-center bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-2xl shadow-md cursor-pointer transition active:scale-95">
+            📸 촬영하기
+            <input type="file" accept="image/*" capture="environment" id="receipt-input-camera" class="hidden" onchange="handleReceiptFile(event)">
+          </label>
+          <label class="block text-center bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold py-3 rounded-2xl shadow-sm cursor-pointer transition active:scale-95">
+            🖼️ 앨범에서 선택
+            <input type="file" accept="image/*" id="receipt-input-gallery" class="hidden" onchange="handleReceiptFile(event)">
+          </label>
+        </div>
+        <div id="ocr-progress" class="hidden mt-3">
+          <div class="w-full bg-emerald-100 h-2.5 rounded-full overflow-hidden">
+            <div id="ocr-progress-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-300" style="width:0%"></div>
+          </div>
+          <p id="ocr-progress-text" class="text-[11px] text-emerald-600 mt-1 font-semibold">인식 준비 중...</p>
+        </div>
+      </section>
+
+      <section id="pending-review" class="hidden bg-white rounded-3xl p-5 shadow-sm border-2 border-amber-300 pop-in">
+        <h2 class="font-title text-lg text-amber-600 mb-1 flex items-center gap-1.5"><span>🔍</span> 인식된 품목 확인</h2>
+        <p class="text-xs text-gray-500 mb-3">이름을 수정하고, 필요없는 항목은 지운 뒤 소비기한을 입력해주세요.</p>
+        <div id="pending-list" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1"></div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="cancelPending()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 rounded-xl transition">취소</button>
+          <button onclick="confirmAddPending()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition active:scale-95">냉장고에 담기</button>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <h2 class="font-title text-lg text-emerald-700 mb-3 flex items-center gap-1.5"><span>✍️</span> 직접 추가하기</h2>
+        <div class="space-y-2 mb-2">
+          <input type="text" id="manual-name" placeholder="품목명 (예: 계란)" onblur="autoFillCategory('manual-name','manual-category')" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-emerald-50/30">
+          <div class="grid grid-cols-2 gap-2">
+            <select id="manual-category" class="text-xs px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300"></select>
+            <select id="manual-location" class="text-xs px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300"></select>
+          </div>
+          <input type="date" id="manual-expiry" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+        </div>
+        <button onclick="addManualItem()" class="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold py-2.5 rounded-xl transition active:scale-95">+ 냉장고에 추가</button>
+      </section>
+
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-title text-lg text-emerald-700 flex items-center gap-1.5"><span>🧾</span> 보관 중인 재료 <span id="fridge-count" class="text-xs text-emerald-400">(0)</span></h2>
+          <button onclick="toggleLocationManage()" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700 shrink-0">⚙ 보관장소 관리</button>
+        </div>
+        <div id="location-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 mb-3"></div>
+        <div id="location-manage" class="hidden bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3 mb-3 space-y-2">
+          <p class="text-[11px] text-gray-500">냉장실, 냉동실, 김치냉장고, 실온 등 우리집에 맞게 보관장소를 자유롭게 추가·수정·삭제하세요.</p>
+          <div id="location-manage-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 pt-2 border-t border-emerald-100">
+            <input type="text" id="new-location-name" placeholder="새 보관장소 (예: 김치냉장고)" onkeydown="if(event.key==='Enter'){event.preventDefault();addStorageLocation();}" class="flex-1 text-xs px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white">
+            <button onclick="addStorageLocation()" class="text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 rounded-xl transition">추가</button>
+          </div>
+        </div>
+        <div class="flex gap-2 mb-3">
+          <button onclick="copySelectedItems()" id="btn-copy-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">📋 선택 재료 복사 (<span id="selected-count">0</span>)</button>
+          <button onclick="searchRecipeForSelected()" id="btn-search-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">🔎 레시피 검색하기</button>
+        </div>
+        <div id="fridge-list" class="space-y-2"></div>
+      </section>
+
+    </div>
+
+    <!-- ===================== VIEW: 장보기 ===================== -->
+    <div id="view-shopping" class="space-y-4 hidden">
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <h2 class="font-title text-lg text-emerald-700 mb-3 flex items-center gap-1.5"><span>🛒</span> 장보기 목록</h2>
+        <div class="flex gap-2 mb-4">
+          <input type="text" id="shopping-name" placeholder="살 품목 입력 (예: 두부)" onkeydown="if(event.key==='Enter'){event.preventDefault();addShoppingItem();}" class="flex-1 text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-emerald-50/30">
+          <button onclick="addShoppingItem()" class="text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-4 rounded-xl transition active:scale-95">추가</button>
+        </div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-400 font-semibold">담긴 품목 <span id="shopping-count">(0)</span></span>
+          <button onclick="sendCheckedShoppingToFridge()" id="btn-shopping-to-fridge" disabled class="text-xs font-bold bg-gray-100 text-gray-400 px-3 py-1.5 rounded-full transition disabled:cursor-not-allowed">🧊 냉장고로 담기 (<span id="shopping-checked-count">0</span>)</button>
+        </div>
+        <div id="shopping-list-container" class="space-y-2"></div>
+      </section>
+    </div>
+
+    <!-- ===================== VIEW: 집밥로그 ===================== -->
+    <div id="view-log" class="space-y-4 hidden">
+
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <div class="flex items-center justify-between mb-3">
+          <button onclick="changeMonth(-1)" class="text-emerald-500 font-bold px-3 py-1 rounded-lg hover:bg-emerald-50">◀</button>
+          <h2 id="calendar-title" class="font-title text-lg text-emerald-700"></h2>
+          <button onclick="changeMonth(1)" class="text-emerald-500 font-bold px-3 py-1 rounded-lg hover:bg-emerald-50">▶</button>
+        </div>
+        <div class="grid grid-cols-7 text-center text-[11px] font-bold text-gray-400 mb-1">
+          <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+        </div>
+        <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
+        <p class="text-[10px] text-gray-400 text-right mt-2">🟢 완료된 요리 &nbsp; ⚪ 계획된 요리</p>
+      </section>
+
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <div class="flex items-center justify-between mb-3 gap-2">
+          <h2 id="day-detail-title" class="font-title text-lg text-emerald-700 min-w-0 truncate">📅 날짜를 선택하세요</h2>
+          <div class="flex gap-1.5 shrink-0">
+            <button onclick="toggleAddPlanForm()" id="btn-toggle-add-plan" class="text-xs font-bold bg-sky-100 hover:bg-sky-200 text-sky-700 px-3 py-1.5 rounded-full transition">📝 계획 추가</button>
+            <button onclick="toggleAddLogForm()" id="btn-toggle-add-log" class="text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-full transition">+ 기록 추가</button>
+          </div>
+        </div>
+
+        <div id="add-plan-form" class="hidden space-y-2 mb-4 bg-sky-50/60 p-3 rounded-2xl border border-sky-100">
+          <p class="text-[11px] font-bold text-sky-600">📝 무슨 재료로 무슨 음식을 만들지 미리 계획해두세요</p>
+          <input type="text" id="plan-name" placeholder="만들 음식 (예: 된장찌개)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
+          <input type="url" id="plan-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
+          <div>
+            <label class="block text-[11px] font-bold text-gray-500 mb-1">냉장고에서 재료 고르기</label>
+            <div id="plan-fridge-picker" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar"></div>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="plan-tag-input" placeholder="재료 직접 입력 후 Enter (장볼 재료 등)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPlanIngredient();}" class="flex-1 text-xs px-3 py-2 border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300">
+            <button onclick="addPlanIngredient()" class="text-xs font-bold bg-sky-100 text-sky-700 px-3 rounded-xl">추가</button>
+          </div>
+          <div id="plan-ingredient-chips" class="flex flex-wrap gap-1"></div>
+          <textarea id="plan-memo" rows="2" placeholder="메모 (선택)" class="w-full text-xs p-2.5 border border-sky-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-sky-300"></textarea>
+          <div class="flex gap-2 pt-1">
+            <button onclick="toggleAddPlanForm()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-2 rounded-xl text-sm">취소</button>
+            <button onclick="submitMealPlan()" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">계획 저장</button>
+          </div>
+        </div>
+
+        <div id="add-log-form" class="hidden space-y-2 mb-4 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100">
+          <input type="text" id="log-name" placeholder="요리명 (예: 김치찌개)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
+          <input type="url" id="log-link" placeholder="레시피 링크 (선택, https://...)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
+          <div class="flex items-center gap-1" id="log-star-input"></div>
+          <div class="flex gap-2">
+            <input type="text" id="log-tag-input" placeholder="주재료 태그 입력 후 Enter (예: 돼지고기)" onkeydown="if(event.key==='Enter'){event.preventDefault();addLogTag();}" class="flex-1 text-xs px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300">
+            <button onclick="addLogTag()" class="text-xs font-bold bg-emerald-100 text-emerald-700 px-3 rounded-xl">추가</button>
+          </div>
+          <div id="log-tag-chips" class="flex flex-wrap gap-1"></div>
+          <textarea id="log-memo" rows="2" placeholder="메모 (선택)" class="w-full text-xs p-2.5 border border-emerald-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300"></textarea>
+          <div class="flex gap-2 pt-1">
+            <button onclick="toggleAddLogForm()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-2 rounded-xl text-sm">취소</button>
+            <button onclick="submitCookLog()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">저장</button>
+          </div>
+        </div>
+
+        <div id="day-detail-plans" class="space-y-2 mb-3"></div>
+        <div id="day-detail-list" class="space-y-2"></div>
+      </section>
+
+    </div>
+
+    <!-- ===================== VIEW: 메뉴판 ===================== -->
+    <div id="view-menu" class="space-y-4 hidden">
+      <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
+        <h2 class="font-title text-lg text-emerald-700 mb-3 flex items-center gap-1.5"><span>📖</span> 우리집 메뉴판</h2>
+        <div class="flex bg-emerald-50 p-1 rounded-xl border border-emerald-100 mb-3">
+          <button id="sort-btn-rating" onclick="setMenuSort('rating')" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">⭐ 별점순</button>
+          <button id="sort-btn-name" onclick="setMenuSort('name')" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">가 이름순</button>
+          <button id="sort-btn-tag" onclick="setMenuSort('tag')" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">🏷️ 태그별</button>
+        </div>
+        <div id="menu-tag-filters" class="hidden flex flex-wrap gap-1.5 mb-3"></div>
+        <div id="menu-list" class="space-y-3"></div>
+      </section>
+    </div>
+
+  </main>
+
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/90 text-white text-xs px-4 py-2.5 rounded-full shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50 max-w-[90vw] text-center">
+    <span id="toast-msg"></span>
+  </div>
+
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onclick="if(event.target===this) toggleSettingsModal()">
+    <div class="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl p-5 max-h-[88vh] overflow-y-auto custom-scrollbar">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="font-title text-lg text-emerald-700">👨‍👩‍👧‍👦 가족 공유 설정</h2>
+        <button onclick="toggleSettingsModal()" class="text-gray-400 text-xl leading-none px-1">✕</button>
+      </div>
+      <p id="sync-status-line" class="text-xs font-semibold mb-3 text-gray-400">⚪ 아직 연결되지 않았어요. 이 기기에만 저장돼요.</p>
+
+      <div class="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3 text-[11px] text-gray-600 space-y-1.5 mb-4 leading-relaxed">
+        <p class="font-bold text-emerald-700">처음 한 번만 설정하면 가족 모두 실시간으로 공유돼요</p>
+        <p>1. firebase.google.com 에서 무료 프로젝트를 만드세요.</p>
+        <p>2. 왼쪽 메뉴 Firestore Database → 데이터베이스 만들기 (테스트 모드로 시작해도 OK).</p>
+        <p>3. Authentication → Sign-in method → 익명(Anonymous) 로그인을 사용 설정하세요.</p>
+        <p>4. 프로젝트 설정(⚙) → 내 앱 → 웹 앱 추가 → 표시되는 firebaseConfig 값 전체를 복사하세요.</p>
+        <p>5. 아래에 붙여넣고, 가족 코드(아무 문자열)를 정해서 연결하면 끝!</p>
+        <p>6. 다른 가족 구성원도 이 화면에 똑같은 firebaseConfig와 가족 코드를 입력하면 실시간으로 함께 보게 돼요.</p>
+      </div>
+
+      <label class="block text-xs font-bold text-gray-500 mb-1">firebaseConfig 붙여넣기</label>
+      <textarea id="firebase-config-input" rows="5" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", ... }' class="w-full text-[11px] font-mono p-2.5 border border-emerald-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 mb-2"></textarea>
+
+      <label class="block text-xs font-bold text-gray-500 mb-1">가족 코드</label>
+      <input type="text" id="family-group-id" placeholder="예: kimfamily2024" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 mb-3">
+
+      <div class="flex gap-2">
+        <button onclick="disconnectFamilySync()" id="btn-disconnect-sync" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-2.5 rounded-xl transition text-sm">연결 해제</button>
+        <button onclick="connectFamilySync()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl transition active:scale-95 text-sm">연결하기</button>
+      </div>
+      <p class="text-[10px] text-gray-400 mt-3 leading-relaxed">⚠️ 이 앱 주소와 가족 코드를 아는 사람은 누구나 데이터에 접근할 수 있어요. 배포 주소는 가족 외에는 알리지 않는 걸 추천해요.</p>
+    </div>
+  </div>
+
+  <script>
+    /* ===================== State & persistence ===================== */
+    let fridgeItems = [];      // {id, name, category, location, expiry, addedAt, checked}
+    let cookLogs = [];         // {id, date, name, link, rating, tags:[], memo}
+    let mealPlans = [];        // {id, date, name, link, ingredients:[string], memo, createdAt} — planned meals not yet cooked
+    let shoppingList = [];     // {id, name, category, addedAt, checked}
+    let storageLocations = []; // {id, name} — customizable per household (냉장실/냉동실/김치냉장고/실온...)
+    let pendingItems = [];     // items awaiting confirmation before entering the fridge (from OCR or shopping list)
+    let activeLocationFilter = null; // null = show all locations
+
+    // Family real-time sync (optional, via Firebase Firestore — configured per-device in the settings modal)
+    let familySyncConfig = null; // {firebaseConfig, groupId}
+    let fsDb = null;
+    let fsUnsub = null;
+    let pushTimer = null;
+
+    const CATEGORY_LIST = [
+      { name: '과일', emoji: '🍎' }, { name: '채소', emoji: '🥦' }, { name: '고기', emoji: '🥩' },
+      { name: '수산물', emoji: '🐟' }, { name: '유제품', emoji: '🥛' }, { name: '요리/반찬', emoji: '🍱' },
+      { name: '음료', emoji: '🥤' }, { name: '주류', emoji: '🍺' }, { name: '조미료', emoji: '🧂' },
+      { name: '향신료', emoji: '🌶️' }, { name: '빵류', emoji: '🍞' }, { name: '디저트', emoji: '🍰' },
+      { name: '견과류', emoji: '🥜' }, { name: '곡류', emoji: '🌾' }, { name: '기타', emoji: '📦' }
+    ];
+
+    const CATEGORY_KEYWORDS = {
+      '과일': ['사과', '바나나', '딸기', '포도', '수박', '참외', '오렌지', '귤', '한라봉', '배', '복숭아', '키위', '망고', '체리', '블루베리', '자몽', '레몬', '라임', '파인애플', '멜론', '석류', '감', '대추'],
+      '채소': ['배추', '양파', '대파', '파', '마늘', '생강', '감자', '고구마', '당근', '오이', '호박', '버섯', '시금치', '상추', '깻잎', '브로콜리', '콩나물', '숙주', '토마토', '피망', '파프리카', '부추', '무', '열무', '미나리', '고추', '양배추', '샐러리'],
+      '고기': ['삼겹살', '소고기', '돼지고기', '닭고기', '목살', '갈비', '안심', '다짐육', '다짐고기', '베이컨', '닭가슴살', '닭다리', '오리고기', '양고기', '차돌박이', '불고기', '스팸', '햄', '소시지'],
+      '수산물': ['고등어', '갈치', '오징어', '새우', '연어', '참치', '조개', '멸치', '미역', '김', '굴', '문어', '낙지', '전복', '꽃게', '게', '조기', '명태', '동태', '북어', '장어', '다시마'],
+      '유제품': ['우유', '치즈', '요거트', '요구르트', '버터', '생크림', '두유', '연유'],
+      '요리/반찬': ['김치', '만두', '반찬', '국', '찌개', '카레', '돈까스', '전', '나물', '장아찌', '젓갈', '볶음', '조림'],
+      '음료': ['주스', '콜라', '사이다', '생수', '커피', '차', '에이드', '탄산수', '이온음료'],
+      '주류': ['소주', '맥주', '와인', '막걸리', '청주', '위스키'],
+      '조미료': ['간장', '고추장', '된장', '설탕', '소금', '식초', '참기름', '들기름', '케찹', '마요네즈', '올리고당', '물엿', '굴소스', '맛술'],
+      '향신료': ['후추', '고춧가루', '카레가루', '계피', '월계수잎', '정향', '팔각', '바질', '오레가노', '파슬리'],
+      '빵류': ['식빵', '빵', '베이글', '크루아상', '바게트', '모닝빵', '도넛'],
+      '디저트': ['케이크', '아이스크림', '초콜릿', '과자', '쿠키', '젤리', '사탕', '푸딩', '마카롱'],
+      '견과류': ['아몬드', '호두', '땅콩', '캐슈넛', '피스타치오', '잣', '해바라기씨'],
+      '곡류': ['쌀', '현미', '보리', '귀리', '콩', '찹쌀', '잡곡', '밀가루']
+    };
+
+    function autoClassifyCategory(name) {
+      if (!name) return '기타';
+      for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+        if (keywords.some(k => name.includes(k))) return cat;
+      }
+      return '기타';
+    }
+
+    function autoFillCategory(nameInputId, categorySelectId) {
+      const name = document.getElementById(nameInputId).value.trim();
+      if (!name) return;
+      document.getElementById(categorySelectId).value = autoClassifyCategory(name);
+    }
+
+    function categoryOptionsHtml(selected) {
+      return CATEGORY_LIST.map(c => `<option value="${c.name}" ${c.name === selected ? 'selected' : ''}>${c.emoji} ${c.name}</option>`).join('');
+    }
+
+    function loadState() {
+      fridgeItems = JSON.parse(localStorage.getItem('fridge_items_v1') || '[]');
+      cookLogs = JSON.parse(localStorage.getItem('cook_logs_v1') || '[]');
+      mealPlans = JSON.parse(localStorage.getItem('meal_plans_v1') || '[]');
+      shoppingList = JSON.parse(localStorage.getItem('shopping_list_v1') || '[]');
+      storageLocations = JSON.parse(localStorage.getItem('storage_locations_v1') || 'null') || [
+        { id: 'loc_fridge', name: '냉장실' },
+        { id: 'loc_freezer', name: '냉동실' },
+        { id: 'loc_room', name: '실온' }
+      ];
+      // migrate items saved before locations/richer categories existed
+      let migrated = false;
+      fridgeItems.forEach(i => {
+        if (!i.location) { i.location = storageLocations[0].id; migrated = true; }
+      });
+      if (migrated) saveFridge();
+    }
+    function saveFridge() { localStorage.setItem('fridge_items_v1', JSON.stringify(fridgeItems)); schedulePush(); }
+    function saveLogs() { localStorage.setItem('cook_logs_v1', JSON.stringify(cookLogs)); schedulePush(); }
+    function saveMealPlans() { localStorage.setItem('meal_plans_v1', JSON.stringify(mealPlans)); schedulePush(); }
+    function saveShopping() { localStorage.setItem('shopping_list_v1', JSON.stringify(shoppingList)); schedulePush(); }
+    function saveLocations() { localStorage.setItem('storage_locations_v1', JSON.stringify(storageLocations)); schedulePush(); }
+
+    function uid() { return Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function toISODate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+
+    /* ===================== Family real-time sync (Firebase Firestore) ===================== */
+    function loadSyncConfig() {
+      const raw = localStorage.getItem('family_sync_config_v1');
+      familySyncConfig = raw ? JSON.parse(raw) : null;
+    }
+
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('스크립트 로드 실패: ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function loadFirebaseSDK() {
+      if (window.firebase && window.firebase.firestore) return;
+      const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+      await loadScriptOnce(base + 'firebase-app-compat.js');
+      await loadScriptOnce(base + 'firebase-auth-compat.js');
+      await loadScriptOnce(base + 'firebase-firestore-compat.js');
+    }
+
+    async function initFamilySync() {
+      if (!familySyncConfig) return;
+      try {
+        await loadFirebaseSDK();
+        if (!firebase.apps.length) firebase.initializeApp(familySyncConfig.firebaseConfig);
+        await firebase.auth().signInAnonymously();
+        fsDb = firebase.firestore();
+        if (fsUnsub) fsUnsub();
+        const docRef = fsDb.collection('families').doc(familySyncConfig.groupId);
+        fsUnsub = docRef.onSnapshot(snap => {
+          const data = snap.data();
+          if (data && data.payload) applyRemoteState(JSON.parse(data.payload));
+        }, err => {
+          console.error(err);
+          showToast('가족 동기화 연결에 문제가 생겼어요.');
+        });
+        updateSyncStatusUI(true);
+        showToast('가족과 실시간으로 연결됐어요! 👨‍👩‍👧‍👦');
+      } catch (err) {
+        console.error(err);
+        fsDb = null;
+        showToast('가족 공유 연결에 실패했어요. firebaseConfig를 확인해주세요.');
+        updateSyncStatusUI(false);
+      }
+    }
+
+    function applyRemoteState(state) {
+      fridgeItems = state.fridgeItems || fridgeItems;
+      cookLogs = state.cookLogs || cookLogs;
+      mealPlans = state.mealPlans || mealPlans;
+      shoppingList = state.shoppingList || shoppingList;
+      if (state.storageLocations && state.storageLocations.length) storageLocations = state.storageLocations;
+      // write straight to localStorage (not via save*()) so we don't immediately re-push what we just received
+      localStorage.setItem('fridge_items_v1', JSON.stringify(fridgeItems));
+      localStorage.setItem('cook_logs_v1', JSON.stringify(cookLogs));
+      localStorage.setItem('meal_plans_v1', JSON.stringify(mealPlans));
+      localStorage.setItem('shopping_list_v1', JSON.stringify(shoppingList));
+      localStorage.setItem('storage_locations_v1', JSON.stringify(storageLocations));
+      renderManualLocationOptions();
+      refreshCurrentView();
+    }
+
+    function refreshCurrentView() {
+      if (!document.getElementById('view-fridge').classList.contains('hidden')) { renderLocationTabs(); renderFridgeList(); }
+      if (!document.getElementById('view-shopping').classList.contains('hidden')) renderShoppingList();
+      if (!document.getElementById('view-log').classList.contains('hidden')) { renderCalendar(); renderDayDetailPlans(); renderDayDetail(); }
+      if (!document.getElementById('view-menu').classList.contains('hidden')) renderMenuBoard();
+    }
+
+    function schedulePush() {
+      if (!familySyncConfig) return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushStateToCloud, 400);
+    }
+
+    function pushStateToCloud() {
+      if (!fsDb || !familySyncConfig) return;
+      const payload = JSON.stringify({ fridgeItems, cookLogs, mealPlans, shoppingList, storageLocations });
+      fsDb.collection('families').doc(familySyncConfig.groupId)
+        .set({ payload, updatedAt: Date.now() }, { merge: true })
+        .catch(err => console.error(err));
+    }
+
+    function toggleSettingsModal() {
+      const modal = document.getElementById('settings-modal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        document.getElementById('firebase-config-input').value = familySyncConfig ? JSON.stringify(familySyncConfig.firebaseConfig, null, 2) : '';
+        document.getElementById('family-group-id').value = familySyncConfig ? familySyncConfig.groupId : '';
+        updateSyncStatusUI(!!fsDb);
+      }
+    }
+
+    function updateSyncStatusUI(connected) {
+      const el = document.getElementById('sync-status-line');
+      const dot = document.getElementById('sync-dot');
+      if (connected) {
+        el.textContent = `🟢 연결됨 (가족 코드: ${familySyncConfig.groupId})`;
+        el.className = 'text-xs font-semibold mb-3 text-emerald-600';
+        dot.classList.remove('hidden');
+      } else if (familySyncConfig) {
+        el.textContent = '🟡 설정은 저장돼 있지만 아직 연결되지 않았어요.';
+        el.className = 'text-xs font-semibold mb-3 text-amber-600';
+        dot.classList.add('hidden');
+      } else {
+        el.textContent = '⚪ 아직 연결되지 않았어요. 이 기기에만 저장돼요.';
+        el.className = 'text-xs font-semibold mb-3 text-gray-400';
+        dot.classList.add('hidden');
+      }
+    }
+
+    async function connectFamilySync() {
+      const raw = document.getElementById('firebase-config-input').value.trim();
+      const groupId = document.getElementById('family-group-id').value.trim();
+      if (!raw || !groupId) { showToast('firebaseConfig와 가족 코드를 모두 입력해주세요.'); return; }
+      let parsedConfig;
+      try { parsedConfig = JSON.parse(raw); }
+      catch (e) { showToast('firebaseConfig 형식이 올바르지 않아요. 다시 확인해주세요.'); return; }
+      familySyncConfig = { firebaseConfig: parsedConfig, groupId };
+      localStorage.setItem('family_sync_config_v1', JSON.stringify(familySyncConfig));
+      showToast('연결하는 중이에요...');
+      await initFamilySync();
+    }
+
+    function disconnectFamilySync() {
+      if (fsUnsub) { fsUnsub(); fsUnsub = null; }
+      fsDb = null;
+      familySyncConfig = null;
+      localStorage.removeItem('family_sync_config_v1');
+      updateSyncStatusUI(false);
+      showToast('가족 공유 연결을 해제했어요. 이 기기에만 저장돼요.');
+    }
+
+    /* ===================== Storage locations (custom tabs) ===================== */
+    function renderLocationTabs() {
+      const wrap = document.getElementById('location-tabs');
+      if (!wrap) return;
+      const chips = [{ id: null, name: '전체' }, ...storageLocations];
+      wrap.innerHTML = chips.map(c => {
+        const active = activeLocationFilter === c.id;
+        const arg = c.id === null ? 'null' : `'${c.id}'`;
+        return `<button onclick="setLocationFilter(${arg})" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">${escapeHtml(c.name)}</button>`;
+      }).join('');
+    }
+
+    function setLocationFilter(id) {
+      activeLocationFilter = id;
+      renderLocationTabs();
+      renderFridgeList();
+    }
+
+    function toggleLocationManage() {
+      document.getElementById('location-manage').classList.toggle('hidden');
+      renderLocationManage();
+    }
+
+    function renderLocationManage() {
+      const list = document.getElementById('location-manage-list');
+      if (!list) return;
+      list.innerHTML = storageLocations.map(l => `
+        <div class="flex items-center gap-2">
+          <input type="text" value="${escapeHtml(l.name)}" onchange="renameStorageLocation('${l.id}', this.value)" class="flex-1 text-xs px-2 py-1.5 border border-emerald-200 rounded-lg bg-white">
+          <button onclick="deleteStorageLocation('${l.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1.5">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function renderManualLocationOptions() {
+      const sel = document.getElementById('manual-location');
+      if (!sel) return;
+      const current = sel.value;
+      sel.innerHTML = storageLocations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+      if (storageLocations.some(l => l.id === current)) sel.value = current;
+    }
+
+    function addStorageLocation() {
+      const input = document.getElementById('new-location-name');
+      const name = input.value.trim();
+      if (!name) { showToast('보관장소 이름을 입력해주세요.'); return; }
+      storageLocations.push({ id: uid(), name });
+      saveLocations();
+      input.value = '';
+      renderLocationTabs();
+      renderLocationManage();
+      renderManualLocationOptions();
+      showToast(`'${name}' 보관장소를 추가했어요!`);
+    }
+
+    function renameStorageLocation(id, name) {
+      const loc = storageLocations.find(l => l.id === id);
+      if (!loc) return;
+      loc.name = name.trim() || loc.name;
+      saveLocations();
+      renderLocationTabs();
+      renderFridgeList();
+    }
+
+    function deleteStorageLocation(id) {
+      if (storageLocations.length <= 1) { showToast('최소 1개의 보관장소는 있어야 해요.'); return; }
+      const loc = storageLocations.find(l => l.id === id);
+      if (!loc) return;
+      if (!confirm(`'${loc.name}' 보관장소를 삭제할까요? 이 위치의 재료는 다른 보관장소로 옮겨져요.`)) return;
+      storageLocations = storageLocations.filter(l => l.id !== id);
+      const fallbackId = storageLocations[0].id;
+      fridgeItems.forEach(i => { if (i.location === id) i.location = fallbackId; });
+      if (activeLocationFilter === id) activeLocationFilter = null;
+      saveFridge();
+      saveLocations();
+      renderLocationTabs();
+      renderLocationManage();
+      renderManualLocationOptions();
+      renderFridgeList();
+      showToast('보관장소를 삭제했어요.');
+    }
+
+    /* ===================== Tabs ===================== */
+    function switchTab(name) {
+      ['fridge', 'shopping', 'log', 'menu'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== name);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === name) {
+          btn.className = "flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all bg-white text-emerald-700 shadow-sm";
+        } else {
+          btn.className = "flex-1 py-2 rounded-xl font-bold text-[11px] sm:text-sm leading-tight transition-all text-emerald-400 hover:text-emerald-600";
+        }
+      });
+      if (name === 'fridge') { renderLocationTabs(); renderFridgeList(); }
+      if (name === 'shopping') renderShoppingList();
+      if (name === 'log') { renderCalendar(); renderDayDetailPlans(); renderDayDetail(); }
+      if (name === 'menu') renderMenuBoard();
+    }
+
+    /* ===================== Fridge: receipt OCR ===================== */
+    async function handleReceiptFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const progressWrap = document.getElementById('ocr-progress');
+      const bar = document.getElementById('ocr-progress-bar');
+      const text = document.getElementById('ocr-progress-text');
+      progressWrap.classList.remove('hidden');
+      bar.style.width = '0%';
+      text.innerText = '이미지 불러오는 중...';
+
+      try {
+        const result = await Tesseract.recognize(file, 'kor+eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              const pct = Math.round((m.progress || 0) * 100);
+              bar.style.width = pct + '%';
+              text.innerText = `품목 인식 중... ${pct}%`;
+            } else if (m.status) {
+              text.innerText = m.status;
+            }
+          }
+        });
+        const items = parseReceiptText(result.data.text);
+        progressWrap.classList.add('hidden');
+        e.target.value = '';
+        if (items.length === 0) {
+          showToast('영수증에서 품목을 찾지 못했어요. 직접 추가해주세요 🙏');
+          return;
+        }
+        const defaultExpiry = new Date();
+        defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+        pendingItems = items.map(name => ({
+          tempId: uid(),
+          name,
+          category: autoClassifyCategory(name),
+          location: storageLocations[0]?.id || '',
+          expiry: toISODate(defaultExpiry)
+        }));
+        renderPendingReview();
+        showToast(`${items.length}개 품목을 인식했어요! 확인 후 담아주세요 ✅`);
+      } catch (err) {
+        progressWrap.classList.add('hidden');
+        showToast('인식에 실패했어요. 사진을 다시 시도해주세요.');
+      }
+    }
+
+    // Heuristic parser: on a Korean receipt, purchased-item lines end with a
+    // price ("품목명 ... 1,000원"); store name/address/phone/summary lines don't.
+    // We only keep lines that look like an item+price row, then strip the price
+    // back off — this filters out everything except the actual purchased items.
+    function parseReceiptText(rawText) {
+      const excludeKeywords = ['합계', '소계', '부가세', '과세', '면세', '받을금액', '거스름', '거스름돈', '카드',
+        '현금', '승인', '가맹점', '사업자', '대표', '전화', 'TEL', 'FAX', '영수증', '포인트', '적립', '할인',
+        '매장', '주소', '품명', '수량', '단가', '금액', '바코드', '고객', '거래', '일시', '번호', 'NO.', '결제',
+        '잔액', '방문', '감사', '환영', '판매자', '통신판매', '교환', '환불', '영업시간', 'WWW', 'HTTP'];
+
+      const addressPattern = /(특별시|광역시|[가-힣]{1,4}(시|군|구|동|읍|면|로|길))\s*\d/;
+      const phonePattern = /\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}/;
+      const priceAtEnd = /(\d{1,3}(,\d{3})+|\d{2,7})\s*원?\s*$/;
+      // common non-food household items that show up on the same mart receipts
+      const nonFoodKeywords = ['휴지', '물티슈', '비닐봉투', '봉투', '세제', '섬유유연제', '수세미', '칫솔', '치약',
+        '샴푸', '린스', '바디워시', '마스크', '건전지', '쓰레기봉투', '종이컵', '호일', '랩', '장갑', '기저귀',
+        '생리대', '면봉', '수건', '락스', '세정제', '방향제', '전구', '고무장갑'];
+
+      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+      const candidates = [];
+      const seen = new Set();
+
+      lines.forEach((line, idx) => {
+        if (idx === 0) return; // first line is almost always the store name
+        const upper = line.toUpperCase();
+        if (excludeKeywords.some(k => upper.includes(k))) return;
+        if (addressPattern.test(line)) return;
+        if (phonePattern.test(line)) return;
+        if (!priceAtEnd.test(line)) return; // only keep "품목명 ... 가격" style rows
+
+        let cleaned = line
+          .replace(priceAtEnd, '')
+          .replace(/(\d{1,3}(,\d{3})+|\d{2,7})\s*원?\s*$/, '') // strip a second stray price/qty
+          .replace(/[x×*]\s*\d+\s*$/i, '')
+          .replace(/^\s*\d+\s*[.)]\s*/, '')
+          .replace(/[*#=~\-_]{2,}/g, '')
+          .trim();
+
+        if (!/[가-힣a-zA-Z]/.test(cleaned)) return;
+        if (cleaned.length < 2 || cleaned.length > 20) return;
+        if (nonFoodKeywords.some(k => cleaned.includes(k))) return;
+
+        const key = cleaned.replace(/\s/g, '');
+        if (seen.has(key) || candidates.length >= 25) return;
+        seen.add(key);
+        candidates.push(cleaned);
+      });
+      return candidates;
+    }
+
+    function renderPendingReview() {
+      const wrap = document.getElementById('pending-review');
+      const list = document.getElementById('pending-list');
+      if (pendingItems.length === 0) {
+        wrap.classList.add('hidden');
+        return;
+      }
+      wrap.classList.remove('hidden');
+      list.innerHTML = pendingItems.map(item => `
+        <div class="bg-amber-50/60 border border-amber-100 rounded-xl p-2 space-y-1.5">
+          <div class="flex items-center gap-2">
+            <input type="text" value="${escapeHtml(item.name)}" onchange="updatePendingField('${item.tempId}','name',this.value)" class="flex-1 min-w-0 text-sm px-2 py-1.5 border border-amber-200 rounded-lg bg-white">
+            <button onclick="removePending('${item.tempId}')" class="text-gray-300 hover:text-red-500 text-sm px-1">✕</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <select onchange="updatePendingField('${item.tempId}','category',this.value)" class="text-[10px] border border-amber-200 rounded-lg px-1.5 py-1 bg-white text-gray-600">
+              ${categoryOptionsHtml(item.category)}
+            </select>
+            <select onchange="updatePendingField('${item.tempId}','location',this.value)" class="text-[10px] border border-amber-200 rounded-lg px-1.5 py-1 bg-white text-gray-600">
+              ${storageLocations.map(l => `<option value="${l.id}" ${l.id === item.location ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+            </select>
+            <input type="date" value="${item.expiry}" onchange="updatePendingField('${item.tempId}','expiry',this.value)" class="text-[10px] px-1.5 py-1 border border-amber-200 rounded-lg bg-white">
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updatePendingField(tempId, field, value) {
+      const item = pendingItems.find(p => p.tempId === tempId);
+      if (item) item[field] = value;
+    }
+
+    function removePending(tempId) {
+      pendingItems = pendingItems.filter(p => p.tempId !== tempId);
+      renderPendingReview();
+    }
+
+    function cancelPending() {
+      pendingItems = [];
+      renderPendingReview();
+    }
+
+    function confirmAddPending() {
+      if (pendingItems.length === 0) return;
+      pendingItems.forEach(p => {
+        fridgeItems.push({
+          id: uid(), name: p.name.trim() || '이름없음', category: p.category,
+          location: p.location || storageLocations[0]?.id || '',
+          expiry: p.expiry || '', addedAt: toISODate(new Date()), checked: false
+        });
+      });
+      saveFridge();
+      showToast(`${pendingItems.length}개 품목을 냉장고에 담았어요! 🧊`);
+      pendingItems = [];
+      renderPendingReview();
+      renderFridgeList();
+    }
+
+    /* ===================== Fridge: manual add & list ===================== */
+    function addManualItem() {
+      const nameInput = document.getElementById('manual-name');
+      const name = nameInput.value.trim();
+      const category = document.getElementById('manual-category').value;
+      const location = document.getElementById('manual-location').value;
+      const expiry = document.getElementById('manual-expiry').value;
+      if (!name) { showToast('품목명을 입력해주세요.'); return; }
+      fridgeItems.push({ id: uid(), name, category, location, expiry, addedAt: toISODate(new Date()), checked: false });
+      saveFridge();
+      nameInput.value = '';
+      document.getElementById('manual-expiry').value = '';
+      renderFridgeList();
+      showToast(`'${name}' 추가되었어요! 🥗`);
+    }
+
+    function dDayInfo(expiry) {
+      if (!expiry) return { label: '기한 미설정', cls: 'bg-gray-100 text-gray-400', days: Infinity };
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const exp = new Date(expiry + 'T00:00:00');
+      const days = Math.round((exp - today) / 86400000);
+      if (days < 0) return { label: `만료 ${Math.abs(days)}일 경과`, cls: 'bg-red-100 text-red-600', days };
+      if (days === 0) return { label: 'D-Day 오늘까지!', cls: 'bg-red-100 text-red-600', days };
+      if (days <= 3) return { label: `D-${days}`, cls: 'bg-orange-100 text-orange-600', days };
+      if (days <= 7) return { label: `D-${days}`, cls: 'bg-amber-100 text-amber-600', days };
+      return { label: `D-${days}`, cls: 'bg-emerald-100 text-emerald-600', days };
+    }
+
+    function renderFridgeList() {
+      const container = document.getElementById('fridge-list');
+      const base = activeLocationFilter ? fridgeItems.filter(i => i.location === activeLocationFilter) : fridgeItems;
+      const sorted = [...base].sort((a, b) => {
+        const da = a.expiry ? dDayInfo(a.expiry).days : Infinity;
+        const db = b.expiry ? dDayInfo(b.expiry).days : Infinity;
+        return da - db;
+      });
+      document.getElementById('fridge-count').innerText = `(${fridgeItems.length})`;
+
+      if (sorted.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🧺</span><p class="text-xs mt-2">${fridgeItems.length === 0 ? '냉장고가 비어있어요. 영수증을 스캔하거나 직접 추가해보세요!' : '이 보관장소에는 재료가 없어요.'}</p></div>`;
+      } else {
+        container.innerHTML = sorted.map(item => {
+          const d = dDayInfo(item.expiry);
+          return `
+          <div class="p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition space-y-1.5">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleItemCheck('${item.id}')" class="w-4.5 h-4.5 accent-emerald-500 cursor-pointer shrink-0">
+              <input type="text" value="${escapeHtml(item.name)}" onchange="updateItemField('${item.id}','name',this.value)" class="flex-1 min-w-0 text-sm font-medium bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-emerald-400 focus:outline-none px-0 py-0.5">
+              <span class="text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${d.cls}">${d.label}</span>
+              <button onclick="deleteFridgeItem('${item.id}')" class="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pl-6">
+              <select onchange="updateItemField('${item.id}','category',this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500">
+                ${categoryOptionsHtml(item.category)}
+              </select>
+              <select onchange="updateItemField('${item.id}','location',this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500">
+                ${storageLocations.map(l => `<option value="${l.id}" ${l.id === item.location ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+              </select>
+              <input type="date" value="${item.expiry || ''}" onchange="updateExpiry('${item.id}', this.value)" class="text-[10px] text-gray-400 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      const selectedCount = fridgeItems.filter(i => i.checked).length;
+      document.getElementById('selected-count').innerText = selectedCount;
+      const copyBtn = document.getElementById('btn-copy-selected');
+      const searchBtn = document.getElementById('btn-search-selected');
+      [copyBtn, searchBtn].forEach(btn => {
+        btn.disabled = selectedCount === 0;
+        btn.className = selectedCount === 0
+          ? "flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed"
+          : "flex-1 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-xl transition active:scale-95";
+      });
+    }
+
+    function toggleItemCheck(id) {
+      const item = fridgeItems.find(i => i.id === id);
+      if (item) { item.checked = !item.checked; saveFridge(); renderFridgeList(); }
+    }
+
+    function updateExpiry(id, value) {
+      const item = fridgeItems.find(i => i.id === id);
+      if (item) { item.expiry = value; saveFridge(); renderFridgeList(); }
+    }
+
+    function updateItemField(id, field, value) {
+      const item = fridgeItems.find(i => i.id === id);
+      if (!item) return;
+      if (field === 'name' && !value.trim()) { renderFridgeList(); return; } // ignore blanking out the name
+      item[field] = field === 'name' ? value.trim() : value;
+      saveFridge();
+      renderFridgeList();
+    }
+
+    function deleteFridgeItem(id) {
+      fridgeItems = fridgeItems.filter(i => i.id !== id);
+      saveFridge();
+      renderFridgeList();
+    }
+
+    function getSelectedNames() {
+      return fridgeItems.filter(i => i.checked).map(i => i.name);
+    }
+
+    function copySelectedItems() {
+      const names = getSelectedNames();
+      if (names.length === 0) return;
+      copyToClipboardText(names.join(', '));
+    }
+
+    function searchRecipeForSelected() {
+      const names = getSelectedNames();
+      if (names.length === 0) return;
+      copyToClipboardText(names.join(', '));
+      const query = encodeURIComponent(names.join(' ') + ' 레시피');
+      window.open(`https://search.naver.com/search.naver?query=${query}`, '_blank');
+    }
+
+    /* ===================== 장보기 목록 ===================== */
+    function addShoppingItem() {
+      const input = document.getElementById('shopping-name');
+      const name = input.value.trim();
+      if (!name) { showToast('품목명을 입력해주세요.'); return; }
+      shoppingList.push({ id: uid(), name, category: autoClassifyCategory(name), addedAt: toISODate(new Date()), checked: false });
+      saveShopping();
+      input.value = '';
+      input.focus();
+      renderShoppingList();
+      showToast(`'${name}' 장보기 목록에 담았어요! 🛒`);
+    }
+
+    function toggleShoppingCheck(id) {
+      const item = shoppingList.find(i => i.id === id);
+      if (item) { item.checked = !item.checked; saveShopping(); renderShoppingList(); }
+    }
+
+    function updateShoppingCategory(id, value) {
+      const item = shoppingList.find(i => i.id === id);
+      if (item) { item.category = value; saveShopping(); }
+    }
+
+    function deleteShoppingItem(id) {
+      shoppingList = shoppingList.filter(i => i.id !== id);
+      saveShopping();
+      renderShoppingList();
+    }
+
+    function renderShoppingList() {
+      const container = document.getElementById('shopping-list-container');
+      document.getElementById('shopping-count').innerText = `(${shoppingList.length})`;
+
+      if (shoppingList.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🛍️</span><p class="text-xs mt-2">장보기 목록이 비어있어요. 살 품목을 추가해보세요!</p></div>`;
+      } else {
+        container.innerHTML = shoppingList.map(item => `
+          <div class="flex items-center gap-2 p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition">
+            <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleShoppingCheck('${item.id}')" class="w-4.5 h-4.5 accent-emerald-500 cursor-pointer shrink-0">
+            <span class="flex-1 min-w-0 text-sm font-medium truncate ${item.checked ? 'line-through text-gray-400' : ''}">${escapeHtml(item.name)}</span>
+            <select onchange="updateShoppingCategory('${item.id}', this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500 shrink-0">
+              ${categoryOptionsHtml(item.category)}
+            </select>
+            <button onclick="deleteShoppingItem('${item.id}')" class="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+          </div>
+        `).join('');
+      }
+
+      const checkedCount = shoppingList.filter(i => i.checked).length;
+      document.getElementById('shopping-checked-count').innerText = checkedCount;
+      const btn = document.getElementById('btn-shopping-to-fridge');
+      btn.disabled = checkedCount === 0;
+      btn.className = checkedCount === 0
+        ? "text-xs font-bold bg-gray-100 text-gray-400 px-3 py-1.5 rounded-full transition disabled:cursor-not-allowed"
+        : "text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-full transition active:scale-95";
+    }
+
+    function sendCheckedShoppingToFridge() {
+      const checked = shoppingList.filter(i => i.checked);
+      if (checked.length === 0) return;
+      const defaultExpiry = new Date();
+      defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+      pendingItems = checked.map(i => ({
+        tempId: uid(),
+        name: i.name,
+        category: i.category || autoClassifyCategory(i.name),
+        location: storageLocations[0]?.id || '',
+        expiry: toISODate(defaultExpiry)
+      }));
+      shoppingList = shoppingList.filter(i => !i.checked);
+      saveShopping();
+      switchTab('fridge');
+      renderPendingReview();
+      showToast(`${checked.length}개 품목을 확인 후 냉장고에 담아주세요 ✅`);
+    }
+
+    /* ===================== 집밥로그 (calendar) ===================== */
+    let currentMonth = new Date(); currentMonth.setDate(1);
+    let selectedDate = toISODate(new Date());
+    let logRating = 0;
+    let logTags = [];
+
+    function changeMonth(delta) {
+      currentMonth.setMonth(currentMonth.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      document.getElementById('calendar-title').innerText = `${currentMonth.getFullYear()}년 ${currentMonth.getMonth() + 1}월`;
+      const grid = document.getElementById('calendar-grid');
+      const year = currentMonth.getFullYear(), month = currentMonth.getMonth();
+      const firstWeekday = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayStr = toISODate(new Date());
+
+      let cells = '';
+      for (let i = 0; i < firstWeekday; i++) cells += `<div></div>`;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${year}-${pad(month + 1)}-${pad(d)}`;
+        const entries = cookLogs.filter(l => l.date === dateStr);
+        const plans = mealPlans.filter(p => p.date === dateStr);
+        const isToday = dateStr === todayStr;
+        const isSelected = dateStr === selectedDate;
+        let base = "aspect-square flex flex-col items-center justify-center rounded-xl text-xs cursor-pointer transition relative ";
+        if (isSelected) base += "bg-emerald-500 text-white font-bold shadow-sm";
+        else if (isToday) base += "bg-emerald-50 text-emerald-700 font-bold border border-emerald-300";
+        else base += "hover:bg-emerald-50 text-gray-600";
+        cells += `
+          <div class="${base}" onclick="selectDay('${dateStr}')">
+            <span>${d}</span>
+            <div class="flex items-center gap-0.5 h-1.5 mt-0.5">
+              ${entries.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}"></span>` : ''}
+              ${plans.length > 0 ? `<span class="w-1.5 h-1.5 rounded-full border ${isSelected ? 'border-white' : 'border-sky-400'}"></span>` : ''}
+            </div>
+          </div>`;
+      }
+      grid.innerHTML = cells;
+    }
+
+    function selectDay(dateStr) {
+      selectedDate = dateStr;
+      document.getElementById('add-log-form').classList.add('hidden');
+      document.getElementById('add-plan-form').classList.add('hidden');
+      renderCalendar();
+      renderDayDetailPlans();
+      renderDayDetail();
+    }
+
+    function toggleAddLogForm() {
+      const form = document.getElementById('add-log-form');
+      form.classList.toggle('hidden');
+      if (!form.classList.contains('hidden')) {
+        document.getElementById('add-plan-form').classList.add('hidden');
+        document.getElementById('log-name').value = '';
+        document.getElementById('log-link').value = '';
+        document.getElementById('log-memo').value = '';
+        logRating = 0; logTags = [];
+        renderStarInput();
+        renderLogTagChips();
+      }
+    }
+
+    function renderStarInput() {
+      const wrap = document.getElementById('log-star-input');
+      wrap.innerHTML = [1, 2, 3, 4, 5].map(n => `
+        <button type="button" class="star-btn text-2xl leading-none" onclick="setLogRating(${n})">${n <= logRating ? '⭐' : '☆'}</button>
+      `).join('');
+    }
+    function setLogRating(n) { logRating = n; renderStarInput(); }
+
+    function addLogTag() {
+      const input = document.getElementById('log-tag-input');
+      const val = input.value.trim();
+      if (!val) return;
+      if (!logTags.includes(val)) logTags.push(val);
+      input.value = '';
+      renderLogTagChips();
+    }
+    function removeLogTag(idx) { logTags.splice(idx, 1); renderLogTagChips(); }
+    function renderLogTagChips() {
+      document.getElementById('log-tag-chips').innerHTML = logTags.map((t, i) => `
+        <span class="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1">
+          #${escapeHtml(t)} <button onclick="removeLogTag(${i})" class="text-emerald-400 hover:text-emerald-700">✕</button>
+        </span>
+      `).join('');
+    }
+
+    function submitCookLog() {
+      const name = document.getElementById('log-name').value.trim();
+      const link = document.getElementById('log-link').value.trim();
+      const memo = document.getElementById('log-memo').value.trim();
+      if (!name) { showToast('요리명을 입력해주세요.'); return; }
+      cookLogs.push({ id: uid(), date: selectedDate, name, link, rating: logRating, tags: [...logTags], memo });
+      saveLogs();
+      document.getElementById('add-log-form').classList.add('hidden');
+      renderCalendar();
+      renderDayDetail();
+      showToast(`'${name}' 기록을 저장했어요! 🍚`);
+    }
+
+    function deleteCookLog(id) {
+      cookLogs = cookLogs.filter(l => l.id !== id);
+      saveLogs();
+      renderCalendar();
+      renderDayDetail();
+    }
+
+    function renderStars(rating) {
+      return [1, 2, 3, 4, 5].map(n => n <= rating ? '⭐' : '☆').join('');
+    }
+
+    /* ===================== 집밥계획 (meal plans → execute into 집밥로그) ===================== */
+    let planIngredients = []; // temp chip list while the add-plan form is open
+    let executeState = {};    // planId -> { rating } while an execute panel is open
+
+    function toggleAddPlanForm() {
+      const form = document.getElementById('add-plan-form');
+      form.classList.toggle('hidden');
+      if (!form.classList.contains('hidden')) {
+        document.getElementById('add-log-form').classList.add('hidden');
+        document.getElementById('plan-name').value = '';
+        document.getElementById('plan-link').value = '';
+        document.getElementById('plan-memo').value = '';
+        planIngredients = [];
+        renderPlanFridgePicker();
+        renderPlanIngredientChips();
+      }
+    }
+
+    function renderPlanFridgePicker() {
+      const wrap = document.getElementById('plan-fridge-picker');
+      if (fridgeItems.length === 0) {
+        wrap.innerHTML = `<span class="text-[11px] text-gray-400">냉장고가 비어있어요. 아래에 직접 입력해주세요.</span>`;
+        return;
+      }
+      wrap.innerHTML = fridgeItems.map(i => `
+        <button type="button" onclick="addPlanIngredientFromFridge('${escapeAttr(i.name)}')" class="text-[11px] font-semibold bg-white border border-sky-200 text-sky-600 px-2 py-1 rounded-full hover:bg-sky-100">+ ${escapeHtml(i.name)}</button>
+      `).join('');
+    }
+
+    function addPlanIngredientFromFridge(name) {
+      if (!planIngredients.includes(name)) planIngredients.push(name);
+      renderPlanIngredientChips();
+    }
+
+    function addPlanIngredient() {
+      const input = document.getElementById('plan-tag-input');
+      const val = input.value.trim();
+      if (!val) return;
+      if (!planIngredients.includes(val)) planIngredients.push(val);
+      input.value = '';
+      renderPlanIngredientChips();
+    }
+
+    function removePlanIngredient(idx) {
+      planIngredients.splice(idx, 1);
+      renderPlanIngredientChips();
+    }
+
+    function renderPlanIngredientChips() {
+      document.getElementById('plan-ingredient-chips').innerHTML = planIngredients.map((t, i) => `
+        <span class="text-[11px] bg-sky-100 text-sky-700 px-2 py-1 rounded-full flex items-center gap-1">
+          ${escapeHtml(t)} <button onclick="removePlanIngredient(${i})" class="text-sky-400 hover:text-sky-700">✕</button>
+        </span>
+      `).join('');
+    }
+
+    function submitMealPlan() {
+      const name = document.getElementById('plan-name').value.trim();
+      const link = document.getElementById('plan-link').value.trim();
+      const memo = document.getElementById('plan-memo').value.trim();
+      if (!name) { showToast('만들 음식 이름을 입력해주세요.'); return; }
+      mealPlans.push({ id: uid(), date: selectedDate, name, link, ingredients: [...planIngredients], memo, createdAt: toISODate(new Date()) });
+      saveMealPlans();
+      document.getElementById('add-plan-form').classList.add('hidden');
+      renderCalendar();
+      renderDayDetailPlans();
+      showToast(`'${name}' 요리 계획을 저장했어요! 📝`);
+    }
+
+    function deleteMealPlan(id) {
+      mealPlans = mealPlans.filter(p => p.id !== id);
+      saveMealPlans();
+      delete executeState[id];
+      renderCalendar();
+      renderDayDetailPlans();
+    }
+
+    function toggleExecutePanel(id) {
+      const panel = document.getElementById(`execute-panel-${id}`);
+      if (!panel) return;
+      panel.classList.toggle('hidden');
+      if (!panel.classList.contains('hidden')) {
+        executeState[id] = executeState[id] || { rating: 0 };
+        renderExecuteStars(id);
+      }
+    }
+
+    function renderExecuteStars(id) {
+      const wrap = document.getElementById(`execute-star-input-${id}`);
+      if (!wrap) return;
+      const rating = (executeState[id] && executeState[id].rating) || 0;
+      wrap.innerHTML = [1, 2, 3, 4, 5].map(n => `
+        <button type="button" class="star-btn text-xl leading-none" onclick="setExecuteRating('${id}', ${n})">${n <= rating ? '⭐' : '☆'}</button>
+      `).join('');
+    }
+
+    function setExecuteRating(id, n) {
+      executeState[id] = executeState[id] || {};
+      executeState[id].rating = n;
+      renderExecuteStars(id);
+    }
+
+    function confirmExecutePlan(id) {
+      const plan = mealPlans.find(p => p.id === id);
+      if (!plan) return;
+      const dateInput = document.getElementById(`execute-date-${id}`);
+      const date = (dateInput && dateInput.value) || plan.date;
+      const rating = (executeState[id] && executeState[id].rating) || 0;
+
+      const consumeIds = [];
+      plan.ingredients.forEach((ing, idx) => {
+        const cb = document.getElementById(`execute-consume-${id}-${idx}`);
+        if (cb && cb.checked && cb.dataset.fridgeId) consumeIds.push(cb.dataset.fridgeId);
+      });
+
+      cookLogs.push({ id: uid(), date, name: plan.name, link: plan.link || '', rating, tags: [...plan.ingredients], memo: plan.memo || '' });
+      saveLogs();
+
+      if (consumeIds.length) {
+        fridgeItems = fridgeItems.filter(i => !consumeIds.includes(i.id));
+        saveFridge();
+        if (!document.getElementById('view-fridge').classList.contains('hidden')) renderFridgeList();
+      }
+
+      mealPlans = mealPlans.filter(p => p.id !== id);
+      saveMealPlans();
+      delete executeState[id];
+
+      renderCalendar();
+      renderDayDetailPlans();
+      renderDayDetail();
+      showToast(`'${plan.name}' 요리를 집밥로그에 기록했어요! 🍚`);
+    }
+
+    function renderDayDetailPlans() {
+      const container = document.getElementById('day-detail-plans');
+      const plans = mealPlans.filter(p => p.date === selectedDate);
+      if (plans.length === 0) { container.innerHTML = ''; return; }
+
+      container.innerHTML = `<div class="text-[11px] font-bold text-sky-500">📝 계획된 요리 (${plans.length})</div>` + plans.map(p => {
+        const matchedIngredients = p.ingredients.map(ing => {
+          const match = fridgeItems.find(f => f.name === ing);
+          return { name: ing, fridgeId: match ? match.id : null };
+        });
+        const hasFridgeMatch = matchedIngredients.some(m => m.fridgeId);
+        return `
+        <div class="bg-sky-50/60 border border-sky-100 rounded-xl p-3 space-y-1.5">
+          <div class="flex items-start justify-between">
+            <div class="font-bold text-sm text-gray-800">${escapeHtml(p.name)}</div>
+            <button onclick="deleteMealPlan('${p.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+          </div>
+          ${p.ingredients.length ? `<div class="flex flex-wrap gap-1">${p.ingredients.map(t => `<span class="text-[10px] bg-white text-sky-600 border border-sky-200 px-1.5 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+          ${p.link ? `<a href="${escapeAttr(p.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-sky-600 underline">🔗 레시피 보기</a>` : ''}
+          ${p.memo ? `<p class="text-xs text-gray-500 bg-white/70 p-2 rounded-lg">${escapeHtml(p.memo)}</p>` : ''}
+          <button onclick="toggleExecutePanel('${p.id}')" class="text-xs font-bold text-white bg-sky-500 hover:bg-sky-600 px-3 py-1.5 rounded-full transition">🍳 요리 완료로 기록하기</button>
+          <div id="execute-panel-${p.id}" class="hidden space-y-2 bg-white rounded-xl p-2.5 border border-sky-200 mt-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-gray-500 shrink-0">완료 날짜</span>
+              <input type="date" id="execute-date-${p.id}" value="${p.date}" class="text-xs px-2 py-1 border border-gray-200 rounded-lg flex-1">
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-gray-500 shrink-0">별점</span>
+              <div class="flex items-center gap-0.5" id="execute-star-input-${p.id}"></div>
+            </div>
+            ${hasFridgeMatch ? `
+            <div>
+              <span class="text-[11px] text-gray-500">냉장고에서 뺄 재료</span>
+              <div class="flex flex-wrap gap-2 mt-1">
+                ${matchedIngredients.map((m, idx) => m.fridgeId ? `
+                  <label class="flex items-center gap-1 text-[11px] bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
+                    <input type="checkbox" id="execute-consume-${p.id}-${idx}" data-fridge-id="${m.fridgeId}" checked class="accent-emerald-500">
+                    ${escapeHtml(m.name)}
+                  </label>` : '').join('')}
+              </div>
+            </div>` : ''}
+            <button onclick="confirmExecutePlan('${p.id}')" class="w-full text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 py-2 rounded-xl transition active:scale-95">✅ 집밥로그에 완료 기록 저장</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      plans.forEach(p => { if (executeState[p.id]) renderExecuteStars(p.id); });
+    }
+
+    function renderDayDetail() {
+      const [y, m, d] = selectedDate.split('-');
+      document.getElementById('day-detail-title').innerText = `📅 ${y}년 ${Number(m)}월 ${Number(d)}일`;
+      const entries = cookLogs.filter(l => l.date === selectedDate);
+      const list = document.getElementById('day-detail-list');
+      if (entries.length === 0) {
+        list.innerHTML = `<div class="text-center py-6 text-gray-400"><p class="text-xs">이 날짜에 기록된 집밥이 없어요.</p></div>`;
+        return;
+      }
+      list.innerHTML = entries.map(e => `
+        <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-1.5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-bold text-sm text-gray-800">${escapeHtml(e.name)}</div>
+              <div class="text-xs">${renderStars(e.rating)}</div>
+            </div>
+            <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+          </div>
+          ${e.tags && e.tags.length ? `<div class="flex flex-wrap gap-1">${e.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+          ${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
+          ${e.memo ? `<p class="text-xs text-gray-500 bg-white/70 p-2 rounded-lg">${escapeHtml(e.memo)}</p>` : ''}
+        </div>
+      `).join('');
+    }
+
+    /* ===================== 메뉴판 ===================== */
+    let menuSortMode = 'rating';
+    let menuTagFilter = null;
+
+    function setMenuSort(mode) {
+      menuSortMode = mode;
+      menuTagFilter = null;
+      renderMenuBoard();
+    }
+
+    function aggregateMenu() {
+      const map = new Map();
+      cookLogs.forEach(l => {
+        const key = l.name.trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { name: l.name.trim(), ratings: [], tags: new Set(), link: l.link, lastDate: l.date, count: 0 });
+        }
+        const entry = map.get(key);
+        entry.ratings.push(l.rating || 0);
+        (l.tags || []).forEach(t => entry.tags.add(t));
+        entry.count++;
+        if (l.date >= entry.lastDate) { entry.lastDate = l.date; if (l.link) entry.link = l.link; }
+      });
+      return Array.from(map.values()).map(e => ({
+        ...e,
+        avgRating: e.ratings.length ? e.ratings.reduce((a, b) => a + b, 0) / e.ratings.length : 0,
+        tags: Array.from(e.tags)
+      }));
+    }
+
+    function renderMenuBoard() {
+      ['rating', 'name', 'tag'].forEach(m => {
+        const btn = document.getElementById(`sort-btn-${m}`);
+        btn.className = m === menuSortMode
+          ? "flex-1 py-1.5 rounded-lg text-xs font-bold transition bg-white text-emerald-700 shadow-sm"
+          : "flex-1 py-1.5 rounded-lg text-xs font-bold transition text-emerald-500 hover:text-emerald-700";
+      });
+
+      const menu = aggregateMenu();
+      const tagFilterWrap = document.getElementById('menu-tag-filters');
+      const list = document.getElementById('menu-list');
+
+      if (menu.length === 0) {
+        tagFilterWrap.classList.add('hidden');
+        list.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🍽️</span><p class="text-xs mt-2">아직 집밥로그가 없어요. 캘린더에서 기록을 추가해보세요!</p></div>`;
+        return;
+      }
+
+      if (menuSortMode === 'tag') {
+        const allTags = Array.from(new Set(menu.flatMap(m => m.tags))).sort((a, b) => a.localeCompare(b, 'ko'));
+        tagFilterWrap.classList.remove('hidden');
+        tagFilterWrap.innerHTML = ['전체', ...allTags].map(t => {
+          const active = (t === '전체' && !menuTagFilter) || t === menuTagFilter;
+          return `<button onclick="setMenuTagFilter(${t === '전체' ? 'null' : `'${escapeAttr(t)}'`})" class="text-[11px] font-bold px-2.5 py-1 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">#${escapeHtml(t)}</button>`;
+        }).join('');
+      } else {
+        tagFilterWrap.classList.add('hidden');
+      }
+
+      let filtered = menu;
+      if (menuSortMode === 'tag' && menuTagFilter) {
+        filtered = filtered.filter(m => m.tags.includes(menuTagFilter));
+      }
+
+      if (menuSortMode === 'rating') {
+        filtered = [...filtered].sort((a, b) => b.avgRating - a.avgRating || a.name.localeCompare(b.name, 'ko'));
+      } else {
+        filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      }
+
+      if (filtered.length === 0) {
+        list.innerHTML = `<div class="text-center py-6 text-gray-400"><p class="text-xs">해당 태그의 메뉴가 없어요.</p></div>`;
+        return;
+      }
+
+      list.innerHTML = filtered.map(m => `
+        <div class="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-3 space-y-1.5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-bold text-sm text-gray-800">${escapeHtml(m.name)}</div>
+              <div class="text-xs">${renderStars(Math.round(m.avgRating))} <span class="text-gray-400 text-[10px]">(${m.avgRating.toFixed(1)} · ${m.count}회 조리)</span></div>
+            </div>
+          </div>
+          ${m.tags.length ? `<div class="flex flex-wrap gap-1">${m.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[10px] text-gray-400">최근 조리: ${m.lastDate}</span>
+            ${m.link ? `<a href="${escapeAttr(m.link)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setMenuTagFilter(tag) {
+      menuTagFilter = tag;
+      renderMenuBoard();
+    }
+
+    /* ===================== Utils ===================== */
+    function copyToClipboardText(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('클립보드에 복사했어요! 이제 레시피를 검색해보세요 📋');
+      } catch (err) {
+        showToast('복사에 실패했어요.');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      toast.classList.add('opacity-100');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 2600);
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function escapeAttr(str) { return escapeHtml(str); }
+
+    /* ===================== Init ===================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      loadSyncConfig();
+      document.getElementById('header-date').innerText = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+      document.getElementById('manual-category').innerHTML = categoryOptionsHtml('기타');
+      renderManualLocationOptions();
+      switchTab('fridge');
+      renderStarInput();
+      if (familySyncConfig) initFamilySync();
+    });
+  </script>
+</body>
+</html>
