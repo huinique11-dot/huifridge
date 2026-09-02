@@ -113,11 +113,17 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-[10px] text-gray-400 mb-0.5">만든 날짜 (직접 만든 음식)</label>
+              <div class="flex items-center justify-between">
+                <label class="block text-[10px] text-gray-400 mb-0.5">만든 날짜 (직접 만든 음식)</label>
+                <button type="button" onclick="clearInput('manual-made-date')" class="text-[10px] text-gray-300 hover:text-red-500">지우기</button>
+              </div>
               <input type="date" id="manual-made-date" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
             </div>
             <div>
-              <label class="block text-[10px] text-gray-400 mb-0.5">소비기한</label>
+              <div class="flex items-center justify-between">
+                <label class="block text-[10px] text-gray-400 mb-0.5">소비기한</label>
+                <button type="button" onclick="clearInput('manual-expiry')" class="text-[10px] text-gray-300 hover:text-red-500">지우기</button>
+              </div>
               <input type="date" id="manual-expiry" class="w-full text-xs px-3 py-2 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-300">
             </div>
           </div>
@@ -774,19 +780,25 @@
       }
     }
 
-    // Heuristic parser: on a Korean receipt, purchased-item lines end with a
-    // price ("품목명 ... 1,000원"); store name/address/phone/summary lines don't.
-    // We only keep lines that look like an item+price row, then strip the price
-    // back off — this filters out everything except the actual purchased items.
+    // Heuristic parser covering two common receipt layouts:
+    //  1) classic paper receipt: "품목명 ... 1,000원" on one line
+    //  2) app purchase-history screenshots (e.g. Costco): item name on its own
+    //     line, followed by a "바코드  수량  단가  금액" line of pure numbers
+    // A line becomes a candidate item if it has a price on itself, OR the very
+    // next line looks like that all-numeric detail row.
     function parseReceiptText(rawText) {
       const excludeKeywords = ['합계', '소계', '부가세', '과세', '면세', '받을금액', '거스름', '거스름돈', '카드',
         '현금', '승인', '가맹점', '사업자', '대표', '전화', 'TEL', 'FAX', '영수증', '포인트', '적립', '할인',
         '매장', '주소', '품명', '수량', '단가', '금액', '바코드', '고객', '거래', '일시', '번호', 'NO.', '결제',
-        '잔액', '방문', '감사', '환영', '판매자', '통신판매', '교환', '환불', '영업시간', 'WWW', 'HTTP'];
+        '잔액', '방문', '감사', '환영', '판매자', '통신판매', '교환', '환불', '영업시간', 'WWW', 'HTTP',
+        '거래구분', '승인금액', '카드번호', '승인번호', '할부'];
 
       const addressPattern = /(특별시|광역시|[가-힣]{1,4}(시|군|구|동|읍|면|로|길))\s*\d/;
       const phonePattern = /\d{2,4}[-.\s]\d{3,4}[-.\s]\d{4}/;
-      const priceAtEnd = /(\d{1,3}(,\d{3})+|\d{2,7})\s*원?\s*$/;
+      // requires comma-grouping or a 원 suffix — a bare trailing number alone
+      // is too likely to be part of a product name/size (e.g. "180MLX10")
+      const priceAtEnd = /((\d{1,3}(,\d{3})+)|(\d+\s*원))\s*T?\s*$/i;
+      const detailRow = /^[\d,.\s\-T원]+$/i; // a barcode/qty/price row: only digits, commas, spaces, dashes
       // common non-food household items that show up on the same mart receipts
       const nonFoodKeywords = ['휴지', '물티슈', '비닐봉투', '봉투', '세제', '섬유유연제', '수세미', '칫솔', '치약',
         '샴푸', '린스', '바디워시', '마스크', '건전지', '쓰레기봉투', '종이컵', '호일', '랩', '장갑', '기저귀',
@@ -796,18 +808,34 @@
       const candidates = [];
       const seen = new Set();
 
-      lines.forEach((line, idx) => {
-        if (idx === 0) return; // first line is almost always the store name
+      function isNoisy(line) {
         const upper = line.toUpperCase();
-        if (excludeKeywords.some(k => upper.includes(k))) return;
-        if (addressPattern.test(line)) return;
-        if (phonePattern.test(line)) return;
-        if (!priceAtEnd.test(line)) return; // only keep "품목명 ... 가격" style rows
+        if (excludeKeywords.some(k => upper.includes(k))) return true;
+        if (addressPattern.test(line)) return true;
+        if (phonePattern.test(line)) return true;
+        if (/^\*+/.test(line) || /^CPN$/i.test(line)) return true; // "*** CPN" coupon markers
+        return false;
+      }
 
-        let cleaned = line
-          .replace(priceAtEnd, '')
-          .replace(/(\d{1,3}(,\d{3})+|\d{2,7})\s*원?\s*$/, '') // strip a second stray price/qty
-          .replace(/[x×*]\s*\d+\s*$/i, '')
+      lines.forEach((line, idx) => {
+        if (isNoisy(line)) return;
+
+        const hasPriceHere = priceAtEnd.test(line);
+        const nextLine = lines[idx + 1];
+        const nextIsDetailRow = nextLine && detailRow.test(nextLine) && /\d/.test(nextLine) && !isNoisy(nextLine);
+        if (!hasPriceHere && !nextIsDetailRow) return; // no price signal anywhere nearby
+
+        // only strip a trailing price when it's actually on this line — a
+        // name-only line (two-line receipt format) may end in plain digits
+        // that are part of the product name/size (e.g. "180MLX10"), not a price
+        let cleaned = line;
+        if (hasPriceHere) {
+          cleaned = cleaned
+            .replace(priceAtEnd, '')
+            .replace(priceAtEnd, '') // strip a second stray price/qty
+            .replace(/[x×*]\s*\d+\s*$/i, '');
+        }
+        cleaned = cleaned
           .replace(/^\s*\d+\s*[.)]\s*/, '')
           .replace(/[*#=~\-_]{2,}/g, '')
           .trim();
@@ -817,7 +845,7 @@
         if (nonFoodKeywords.some(k => cleaned.includes(k))) return;
 
         const key = cleaned.replace(/\s/g, '');
-        if (seen.has(key) || candidates.length >= 25) return;
+        if (seen.has(key) || candidates.length >= 40) return;
         seen.add(key);
         candidates.push(cleaned);
       });
@@ -845,7 +873,8 @@
             <select onchange="updatePendingField('${item.tempId}','location',this.value)" class="text-[10px] border border-amber-200 rounded-lg px-1.5 py-1 bg-white text-gray-600">
               ${storageLocations.map(l => `<option value="${l.id}" ${l.id === item.location ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
             </select>
-            <input type="date" value="${item.expiry}" onchange="updatePendingField('${item.tempId}','expiry',this.value)" class="text-[10px] px-1.5 py-1 border border-amber-200 rounded-lg bg-white">
+            <input type="date" id="pending-expiry-${item.tempId}" value="${item.expiry}" onchange="updatePendingField('${item.tempId}','expiry',this.value)" class="text-[10px] px-1.5 py-1 border border-amber-200 rounded-lg bg-white">
+            ${item.expiry ? `<button onclick="document.getElementById('pending-expiry-${item.tempId}').value=''; updatePendingField('${item.tempId}','expiry','')" class="text-gray-300 hover:text-red-500 text-[10px] px-0.5" title="소비기한 지우기">✕</button>` : ''}
           </div>
         </div>
       `).join('');
@@ -952,11 +981,12 @@
               <span class="flex items-center gap-1">
                 <span class="text-[9px] text-gray-400 shrink-0">만든날</span>
                 <input type="date" value="${item.madeDate || ''}" onchange="updateItemField('${item.id}','madeDate',this.value)" class="text-[10px] text-gray-500 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
-                ${item.madeDate ? `<span class="text-[9px] text-gray-400 shrink-0">${daysSince(item.madeDate)}일째</span>` : ''}
+                ${item.madeDate ? `<button onclick="updateItemField('${item.id}','madeDate','')" class="text-gray-300 hover:text-red-500 text-[10px] px-0.5 shrink-0" title="만든 날짜 지우기">✕</button><span class="text-[9px] text-gray-400 shrink-0">${daysSince(item.madeDate)}일째</span>` : ''}
               </span>
               <span class="flex items-center gap-1">
                 <span class="text-[9px] text-gray-400 shrink-0">기한</span>
                 <input type="date" value="${item.expiry || ''}" onchange="updateExpiry('${item.id}', this.value)" class="text-[10px] text-gray-400 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
+                ${item.expiry ? `<button onclick="updateExpiry('${item.id}','')" class="text-gray-300 hover:text-red-500 text-[10px] px-0.5 shrink-0" title="소비기한 지우기">✕</button>` : ''}
               </span>
             </div>
           </div>`;
@@ -1756,6 +1786,11 @@
       return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
     function escapeAttr(str) { return escapeHtml(str); }
+
+    function clearInput(id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    }
 
     /* ===================== Init ===================== */
     window.addEventListener('DOMContentLoaded', () => {
