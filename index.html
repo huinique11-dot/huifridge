@@ -938,6 +938,11 @@
           .replace(/^["'""''`|<>.\s]+/, '') // stray OCR-garbage prefix (icons/margins misread as punctuation)
           .trim();
 
+        // shopping-app listings are formatted "품목명, 규격, 수량" (e.g.
+        // "국내산 양파, 5kg (대), 1개") — keep just the product name, drop
+        // the size/weight/count segments after the first comma
+        if (cleaned.includes(',')) cleaned = cleaned.split(',')[0].trim();
+
         if (!/[가-힣a-zA-Z]/.test(cleaned)) return;
         if (cleaned.length < 2 || cleaned.length > 40) return;
         if (nonFoodKeywords.some(k => cleaned.includes(k))) return;
