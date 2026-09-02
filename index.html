@@ -80,6 +80,7 @@
         <p><b class="text-emerald-700">📷 영수증으로 담기</b> — 사진 찍거나 앨범에서 고르면 식품 품목만 자동으로 인식해요. 인식 결과에서 이름을 고치고 필요없는 줄은 지운 뒤 "냉장고에 담기"를 눌러요.</p>
         <p><b class="text-emerald-700">✍️ 직접 추가하기</b> — 이름을 입력하면 카테고리가 자동으로 추측돼요(수정 가능). 직접 만든 반찬은 소비기한 대신 "만든 날짜"를 넣으면 "N일째"로 표시돼요.</p>
         <p><b class="text-emerald-700">⚙ 보관장소 관리</b> — 냉장실/냉동실/실온 외에 김치냉장고처럼 우리집만의 보관장소를 자유롭게 추가·삭제할 수 있어요.</p>
+        <p><b class="text-emerald-700">정렬·보기 방식</b> — 목록 위 버튼으로 기한순/가나다순 정렬을 바꾸고, "간단히"를 누르면 카테고리·보관장소·날짜 없이 이름과 기한만 한 줄로 보여서 스크롤이 짧아져요.</p>
         <p><b class="text-emerald-700">뱃지 색깔</b> — 🔴 만료·오늘까지 🟠 3일 이내 🟡 7일 이내 🟢 여유 있음 ⚪ 기한 미설정</p>
         <p><b class="text-emerald-700">📋 레시피 찾기</b> — 재료 체크박스를 선택하고 "레시피 검색하기"를 누르면 재료가 복사되면서 네이버 검색이 바로 열려요.</p>
       </div>
@@ -160,6 +161,16 @@
         <div class="flex gap-2 mb-3">
           <button onclick="copySelectedItems()" id="btn-copy-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">📋 선택 재료 복사 (<span id="selected-count">0</span>)</button>
           <button onclick="searchRecipeForSelected()" id="btn-search-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">🔎 레시피 검색하기</button>
+        </div>
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex bg-gray-100 p-0.5 rounded-lg">
+            <button onclick="setFridgeSort('expiry')" id="fsort-btn-expiry" class="px-2.5 py-1 rounded-md text-[10px] font-bold transition">기한순</button>
+            <button onclick="setFridgeSort('name')" id="fsort-btn-name" class="px-2.5 py-1 rounded-md text-[10px] font-bold transition">가나다순</button>
+          </div>
+          <div class="flex bg-gray-100 p-0.5 rounded-lg">
+            <button onclick="setFridgeView('detailed')" id="fview-btn-detailed" class="px-2.5 py-1 rounded-md text-[10px] font-bold transition">자세히</button>
+            <button onclick="setFridgeView('compact')" id="fview-btn-compact" class="px-2.5 py-1 rounded-md text-[10px] font-bold transition">간단히</button>
+          </div>
         </div>
         <div id="fridge-list" class="space-y-2"></div>
       </section>
@@ -365,6 +376,8 @@
     let storageLocations = []; // {id, name} — customizable per household (냉장실/냉동실/김치냉장고/실온...)
     let pendingItems = [];     // items awaiting confirmation before entering the fridge (from OCR or shopping list)
     let activeLocationFilter = null; // null = show all locations
+    let fridgeSortMode = localStorage.getItem('fridge_sort_mode_v1') || 'expiry'; // 'expiry' | 'name'
+    let fridgeViewMode = localStorage.getItem('fridge_view_mode_v1') || 'detailed'; // 'detailed' | 'compact'
 
     // Family real-time sync (optional, via Firebase Firestore — configured per-device in the settings modal)
     let familySyncConfig = null; // {firebaseConfig, groupId}
@@ -993,29 +1006,46 @@
       return Math.round((today - made) / 86400000);
     }
 
+    function setFridgeSort(mode) {
+      fridgeSortMode = mode;
+      localStorage.setItem('fridge_sort_mode_v1', mode);
+      renderFridgeList();
+    }
+
+    function setFridgeView(mode) {
+      fridgeViewMode = mode;
+      localStorage.setItem('fridge_view_mode_v1', mode);
+      renderFridgeList();
+    }
+
+    function updateFridgeToolbarUI() {
+      const activeCls = "px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-white text-emerald-700 shadow-sm";
+      const inactiveCls = "px-2.5 py-1 rounded-md text-[10px] font-bold transition text-gray-400 hover:text-emerald-600";
+      document.getElementById('fsort-btn-expiry').className = fridgeSortMode === 'expiry' ? activeCls : inactiveCls;
+      document.getElementById('fsort-btn-name').className = fridgeSortMode === 'name' ? activeCls : inactiveCls;
+      document.getElementById('fview-btn-detailed').className = fridgeViewMode === 'detailed' ? activeCls : inactiveCls;
+      document.getElementById('fview-btn-compact').className = fridgeViewMode === 'compact' ? activeCls : inactiveCls;
+    }
+
     function renderFridgeList() {
       const container = document.getElementById('fridge-list');
       const base = activeLocationFilter ? fridgeItems.filter(i => i.location === activeLocationFilter) : fridgeItems;
       const sorted = [...base].sort((a, b) => {
+        if (fridgeSortMode === 'name') return a.name.localeCompare(b.name, 'ko');
         const da = a.expiry ? dDayInfo(a.expiry).days : Infinity;
         const db = b.expiry ? dDayInfo(b.expiry).days : Infinity;
         return da - db;
       });
       document.getElementById('fridge-count').innerText = `(${fridgeItems.length})`;
+      updateFridgeToolbarUI();
 
       if (sorted.length === 0) {
         container.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🧺</span><p class="text-xs mt-2">${fridgeItems.length === 0 ? '냉장고가 비어있어요. 영수증을 스캔하거나 직접 추가해보세요!' : '이 보관장소에는 재료가 없어요.'}</p></div>`;
       } else {
         container.innerHTML = sorted.map(item => {
           const d = dDayInfo(item.expiry);
-          return `
-          <div class="p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition space-y-1.5">
-            <div class="flex items-center gap-2">
-              <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleItemCheck('${item.id}')" class="w-4.5 h-4.5 accent-emerald-500 cursor-pointer shrink-0">
-              <input type="text" value="${escapeHtml(item.name)}" onchange="updateItemField('${item.id}','name',this.value)" class="flex-1 min-w-0 text-sm font-medium bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-emerald-400 focus:outline-none px-0 py-0.5">
-              <span class="text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${d.cls}">${d.label}</span>
-              <button onclick="deleteFridgeItem('${item.id}')" class="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
-            </div>
+          const compact = fridgeViewMode === 'compact';
+          const metaRow = compact ? '' : `
             <div class="flex flex-wrap items-center gap-1.5 pl-6">
               <select onchange="updateItemField('${item.id}','category',this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500">
                 ${categoryOptionsHtml(item.category)}
@@ -1033,7 +1063,15 @@
                 <input type="date" value="${item.expiry || ''}" onchange="updateExpiry('${item.id}', this.value)" class="text-[10px] text-gray-400 border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none">
                 ${item.expiry ? `<button onclick="updateExpiry('${item.id}','')" class="text-gray-300 hover:text-red-500 text-[10px] px-0.5 shrink-0" title="소비기한 지우기">✕</button>` : ''}
               </span>
-            </div>
+            </div>`;
+          return `
+          <div class="p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition ${compact ? '' : 'space-y-1.5'}">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleItemCheck('${item.id}')" class="w-4.5 h-4.5 accent-emerald-500 cursor-pointer shrink-0">
+              <input type="text" value="${escapeHtml(item.name)}" onchange="updateItemField('${item.id}','name',this.value)" class="flex-1 min-w-0 text-sm font-medium bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-emerald-400 focus:outline-none px-0 py-0.5">
+              <span class="text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${d.cls}">${d.label}</span>
+              <button onclick="deleteFridgeItem('${item.id}')" class="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
+            </div>${metaRow}
           </div>`;
         }).join('');
       }
