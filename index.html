@@ -104,6 +104,11 @@
           </div>
           <p id="ocr-progress-text" class="text-[11px] text-emerald-600 mt-1 font-semibold">인식 준비 중...</p>
         </div>
+        <div id="ocr-raw-box" class="hidden mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3">
+          <p class="text-[11px] text-amber-700 font-bold mb-1.5">자동으로 품목을 찾지 못했어요. 아래 인식된 원본 글자를 보고 "✍️ 직접 추가하기"로 넣어주세요.</p>
+          <textarea id="ocr-raw-text" readonly rows="6" class="w-full text-[10px] font-mono p-2 border border-amber-200 rounded-lg bg-white resize-none"></textarea>
+          <button onclick="copyRawOcrText()" class="mt-1.5 text-[11px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-lg transition">📋 원본 텍스트 복사</button>
+        </div>
       </section>
 
       <section id="pending-review" class="hidden bg-white rounded-3xl p-5 shadow-sm border-2 border-amber-300 pop-in">
@@ -811,6 +816,7 @@
       progressWrap.classList.remove('hidden');
       bar.style.width = '0%';
       text.innerText = '이미지 불러오는 중...';
+      document.getElementById('ocr-raw-box').classList.add('hidden');
 
       try {
         const result = await Tesseract.recognize(file, 'kor+eng', {
@@ -828,6 +834,8 @@
         progressWrap.classList.add('hidden');
         e.target.value = '';
         if (items.length === 0) {
+          document.getElementById('ocr-raw-text').value = result.data.text;
+          document.getElementById('ocr-raw-box').classList.remove('hidden');
           showToast('영수증에서 품목을 찾지 못했어요. 직접 추가해주세요 🙏');
           return;
         }
@@ -1923,6 +1931,11 @@
     }
 
     /* ===================== Utils ===================== */
+    function copyRawOcrText() {
+      const text = document.getElementById('ocr-raw-text').value;
+      if (text) copyToClipboardText(text);
+    }
+
     function copyToClipboardText(text) {
       const ta = document.createElement('textarea');
       ta.value = text;
