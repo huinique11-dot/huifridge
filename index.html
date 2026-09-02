@@ -205,7 +205,7 @@
           <textarea id="plan-memo" rows="2" placeholder="메모 (선택)" class="w-full text-xs p-2.5 border border-sky-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-sky-300"></textarea>
           <div class="flex gap-2 pt-1">
             <button onclick="toggleAddPlanForm()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-2 rounded-xl text-sm">취소</button>
-            <button onclick="submitMealPlan()" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">계획 저장</button>
+            <button id="btn-submit-plan" onclick="submitMealPlan()" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">계획 저장</button>
           </div>
         </div>
 
@@ -225,7 +225,7 @@
           <textarea id="log-memo" rows="2" placeholder="메모 (선택)" class="w-full text-xs p-2.5 border border-emerald-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300"></textarea>
           <div class="flex gap-2 pt-1">
             <button onclick="toggleAddLogForm()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-2 rounded-xl text-sm">취소</button>
-            <button onclick="submitCookLog()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">저장</button>
+            <button id="btn-submit-log" onclick="submitCookLog()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95">저장</button>
           </div>
         </div>
 
@@ -262,6 +262,9 @@
         <button onclick="toggleSettingsModal()" class="text-gray-400 text-xl leading-none px-1">✕</button>
       </div>
       <p id="sync-status-line" class="text-xs font-semibold mb-3 text-gray-400">⚪ 아직 연결되지 않았어요. 이 기기에만 저장돼요.</p>
+
+      <label class="block text-xs font-bold text-gray-500 mb-1">내 이름 (댓글에 표시돼요)</label>
+      <input type="text" id="my-nickname" placeholder="예: 엄마, 아빠, 첫째" onchange="saveNickname(this.value)" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 mb-4">
 
       <div class="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3 text-[11px] text-gray-600 space-y-1.5 mb-4 leading-relaxed">
         <p class="font-bold text-emerald-700">처음 한 번만 설정하면 가족 모두 실시간으로 공유돼요</p>
@@ -466,10 +469,29 @@
       const modal = document.getElementById('settings-modal');
       modal.classList.toggle('hidden');
       if (!modal.classList.contains('hidden')) {
+        document.getElementById('my-nickname').value = localStorage.getItem('family_nickname_v1') || '';
         document.getElementById('firebase-config-input').value = familySyncConfig ? JSON.stringify(familySyncConfig.firebaseConfig, null, 2) : '';
         document.getElementById('family-group-id').value = familySyncConfig ? familySyncConfig.groupId : '';
         updateSyncStatusUI(!!fsDb);
       }
+    }
+
+    function saveNickname(value) {
+      const name = value.trim();
+      if (name) localStorage.setItem('family_nickname_v1', name);
+      else localStorage.removeItem('family_nickname_v1');
+    }
+
+    function getNickname() {
+      let name = localStorage.getItem('family_nickname_v1');
+      if (name) return name;
+      name = prompt('댓글에 표시할 이름을 입력해주세요 (예: 엄마, 아빠, 첫째)');
+      if (name && name.trim()) {
+        name = name.trim();
+        localStorage.setItem('family_nickname_v1', name);
+        return name;
+      }
+      return '가족';
     }
 
     function updateSyncStatusUI(connected) {
@@ -1035,6 +1057,8 @@
       form.classList.toggle('hidden');
       if (!form.classList.contains('hidden')) {
         document.getElementById('add-plan-form').classList.add('hidden');
+        editingLogId = null;
+        document.getElementById('btn-submit-log').innerText = '저장';
         document.getElementById('log-name').value = '';
         document.getElementById('log-link').value = '';
         document.getElementById('log-memo').value = '';
@@ -1086,24 +1110,126 @@
       `).join('');
     }
 
+    let editingLogId = null;
+
     function submitCookLog() {
       const name = document.getElementById('log-name').value.trim();
       const link = document.getElementById('log-link').value.trim();
       const memo = document.getElementById('log-memo').value.trim();
       if (!name) { showToast('요리명을 입력해주세요.'); return; }
-      cookLogs.push({ id: uid(), date: selectedDate, name, link, rating: logRating, tags: [...logTags], memo });
+      if (editingLogId) {
+        const entry = cookLogs.find(l => l.id === editingLogId);
+        if (entry) { entry.name = name; entry.link = link; entry.rating = logRating; entry.tags = [...logTags]; entry.memo = memo; }
+        editingLogId = null;
+        showToast(`'${name}' 기록을 수정했어요! ✏️`);
+      } else {
+        cookLogs.push({ id: uid(), date: selectedDate, name, link, rating: logRating, tags: [...logTags], memo, comments: [] });
+        showToast(`'${name}' 기록을 저장했어요! 🍚`);
+      }
       saveLogs();
       document.getElementById('add-log-form').classList.add('hidden');
+      document.getElementById('btn-submit-log').innerText = '저장';
       renderCalendar();
       renderDayDetail();
-      showToast(`'${name}' 기록을 저장했어요! 🍚`);
+    }
+
+    function editCookLog(id) {
+      const entry = cookLogs.find(l => l.id === id);
+      if (!entry) return;
+      editingLogId = id;
+      document.getElementById('add-plan-form').classList.add('hidden');
+      document.getElementById('add-log-form').classList.remove('hidden');
+      document.getElementById('log-name').value = entry.name;
+      document.getElementById('log-link').value = entry.link || '';
+      document.getElementById('log-memo').value = entry.memo || '';
+      logRating = entry.rating || 0;
+      logTags = [...(entry.tags || [])];
+      renderStarInput();
+      renderLogFridgePicker();
+      renderLogTagChips();
+      document.getElementById('btn-submit-log').innerText = '수정 완료';
     }
 
     function deleteCookLog(id) {
+      if (!confirm('이 집밥 기록을 삭제할까요?')) return;
       cookLogs = cookLogs.filter(l => l.id !== id);
       saveLogs();
       renderCalendar();
       renderDayDetail();
+    }
+
+    /* ===================== 댓글 (가족 피드백) ===================== */
+    let openComments = new Set();
+
+    function toggleComments(id) {
+      if (openComments.has(id)) openComments.delete(id); else openComments.add(id);
+      renderDayDetail();
+      renderDayDetailPlans();
+    }
+
+    function addLogComment(logId) {
+      const input = document.getElementById(`log-comment-input-${logId}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const entry = cookLogs.find(l => l.id === logId);
+      if (!entry) return;
+      if (!entry.comments) entry.comments = [];
+      entry.comments.push({ id: uid(), text, author: getNickname(), createdAt: Date.now() });
+      saveLogs();
+      openComments.add(logId);
+      renderDayDetail();
+    }
+
+    function deleteLogComment(logId, commentId) {
+      const entry = cookLogs.find(l => l.id === logId);
+      if (!entry) return;
+      entry.comments = (entry.comments || []).filter(c => c.id !== commentId);
+      saveLogs();
+      renderDayDetail();
+    }
+
+    function addPlanComment(planId) {
+      const input = document.getElementById(`plan-comment-input-${planId}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const plan = mealPlans.find(p => p.id === planId);
+      if (!plan) return;
+      if (!plan.comments) plan.comments = [];
+      plan.comments.push({ id: uid(), text, author: getNickname(), createdAt: Date.now() });
+      saveMealPlans();
+      openComments.add(planId);
+      renderDayDetailPlans();
+    }
+
+    function deletePlanComment(planId, commentId) {
+      const plan = mealPlans.find(p => p.id === planId);
+      if (!plan) return;
+      plan.comments = (plan.comments || []).filter(c => c.id !== commentId);
+      saveMealPlans();
+      renderDayDetailPlans();
+    }
+
+    function renderCommentsSection(kind, entryId, comments) {
+      const isOpen = openComments.has(entryId);
+      const addFn = kind === 'log' ? 'addLogComment' : 'addPlanComment';
+      const deleteFn = kind === 'log' ? 'deleteLogComment' : 'deletePlanComment';
+      return `
+        <div class="pt-1.5 border-t border-emerald-100/70">
+          <button onclick="toggleComments('${entryId}')" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700">💬 가족 댓글 ${comments.length > 0 ? `(${comments.length})` : ''}</button>
+          <div class="${isOpen ? '' : 'hidden'} mt-1.5 space-y-1.5">
+            ${comments.map(c => `
+              <div class="flex items-start justify-between gap-2 bg-white/70 rounded-lg px-2 py-1.5">
+                <div class="text-xs min-w-0"><span class="font-bold text-emerald-600">${escapeHtml(c.author)}</span> <span class="text-gray-600 break-words">${escapeHtml(c.text)}</span></div>
+                <button onclick="${deleteFn}('${entryId}','${c.id}')" class="text-gray-300 hover:text-red-500 text-[10px] shrink-0">✕</button>
+              </div>
+            `).join('')}
+            <div class="flex gap-1.5">
+              <input type="text" id="${kind}-comment-input-${entryId}" placeholder="댓글 달기..." onkeydown="if(event.key==='Enter'){event.preventDefault();${addFn}('${entryId}');}" class="flex-1 text-xs px-2 py-1.5 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-300">
+              <button onclick="${addFn}('${entryId}')" class="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 rounded-lg shrink-0">등록</button>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function renderStars(rating) {
@@ -1119,6 +1245,8 @@
       form.classList.toggle('hidden');
       if (!form.classList.contains('hidden')) {
         document.getElementById('add-log-form').classList.add('hidden');
+        editingPlanId = null;
+        document.getElementById('btn-submit-plan').innerText = '계획 저장';
         document.getElementById('plan-name').value = '';
         document.getElementById('plan-link').value = '';
         document.getElementById('plan-memo').value = '';
@@ -1166,20 +1294,46 @@
       `).join('');
     }
 
+    let editingPlanId = null;
+
     function submitMealPlan() {
       const name = document.getElementById('plan-name').value.trim();
       const link = document.getElementById('plan-link').value.trim();
       const memo = document.getElementById('plan-memo').value.trim();
       if (!name) { showToast('만들 음식 이름을 입력해주세요.'); return; }
-      mealPlans.push({ id: uid(), date: selectedDate, name, link, ingredients: [...planIngredients], memo, createdAt: toISODate(new Date()) });
+      if (editingPlanId) {
+        const plan = mealPlans.find(p => p.id === editingPlanId);
+        if (plan) { plan.name = name; plan.link = link; plan.ingredients = [...planIngredients]; plan.memo = memo; }
+        editingPlanId = null;
+        showToast(`'${name}' 계획을 수정했어요! ✏️`);
+      } else {
+        mealPlans.push({ id: uid(), date: selectedDate, name, link, ingredients: [...planIngredients], memo, createdAt: toISODate(new Date()), comments: [] });
+        showToast(`'${name}' 요리 계획을 저장했어요! 📝`);
+      }
       saveMealPlans();
       document.getElementById('add-plan-form').classList.add('hidden');
+      document.getElementById('btn-submit-plan').innerText = '계획 저장';
       renderCalendar();
       renderDayDetailPlans();
-      showToast(`'${name}' 요리 계획을 저장했어요! 📝`);
+    }
+
+    function editMealPlan(id) {
+      const plan = mealPlans.find(p => p.id === id);
+      if (!plan) return;
+      editingPlanId = id;
+      document.getElementById('add-log-form').classList.add('hidden');
+      document.getElementById('add-plan-form').classList.remove('hidden');
+      document.getElementById('plan-name').value = plan.name;
+      document.getElementById('plan-link').value = plan.link || '';
+      document.getElementById('plan-memo').value = plan.memo || '';
+      planIngredients = [...(plan.ingredients || [])];
+      renderPlanFridgePicker();
+      renderPlanIngredientChips();
+      document.getElementById('btn-submit-plan').innerText = '수정 완료';
     }
 
     function deleteMealPlan(id) {
+      if (!confirm('이 계획을 삭제할까요?')) return;
       mealPlans = mealPlans.filter(p => p.id !== id);
       saveMealPlans();
       delete executeState[id];
@@ -1259,7 +1413,10 @@
         <div class="bg-sky-50/60 border border-sky-100 rounded-xl p-3 space-y-1.5">
           <div class="flex items-start justify-between">
             <div class="font-bold text-sm text-gray-800">${escapeHtml(p.name)}</div>
-            <button onclick="deleteMealPlan('${p.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="editMealPlan('${p.id}')" class="text-gray-300 hover:text-sky-600 text-xs px-1">✏️</button>
+              <button onclick="deleteMealPlan('${p.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+            </div>
           </div>
           ${p.ingredients.length ? `<div class="flex flex-wrap gap-1">${p.ingredients.map(t => `<span class="text-[10px] bg-white text-sky-600 border border-sky-200 px-1.5 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           ${p.link ? `<a href="${escapeAttr(p.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-sky-600 underline">🔗 레시피 보기</a>` : ''}
@@ -1287,6 +1444,7 @@
             </div>` : ''}
             <button onclick="confirmExecutePlan('${p.id}')" class="w-full text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 py-2 rounded-xl transition active:scale-95">✅ 집밥로그에 완료 기록 저장</button>
           </div>
+          ${renderCommentsSection('plan', p.id, p.comments || [])}
         </div>`;
       }).join('');
 
@@ -1309,11 +1467,15 @@
               <div class="font-bold text-sm text-gray-800">${escapeHtml(e.name)}</div>
               <div class="text-xs">${renderStars(e.rating)}</div>
             </div>
-            <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="editCookLog('${e.id}')" class="text-gray-300 hover:text-emerald-600 text-xs px-1">✏️</button>
+              <button onclick="deleteCookLog('${e.id}')" class="text-gray-300 hover:text-red-500 text-xs px-1">✕</button>
+            </div>
           </div>
           ${e.tags && e.tags.length ? `<div class="flex flex-wrap gap-1">${e.tags.map(t => `<span class="text-[10px] bg-white text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-full">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           ${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
           ${e.memo ? `<p class="text-xs text-gray-500 bg-white/70 p-2 rounded-lg">${escapeHtml(e.memo)}</p>` : ''}
+          ${renderCommentsSection('log', e.id, e.comments || [])}
         </div>
       `).join('');
     }
