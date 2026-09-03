@@ -80,7 +80,8 @@
         <p><b class="text-emerald-700">📷 영수증으로 담기</b> — 사진 찍거나 앨범에서 고르면 식품 품목만 자동으로 인식해요. 인식 결과에서 이름을 고치고 필요없는 줄은 지운 뒤 "냉장고에 담기"를 눌러요.</p>
         <p><b class="text-emerald-700">✍️ 직접 추가하기</b> — 이름을 입력하면 카테고리가 자동으로 추측돼요(수정 가능). 직접 만든 반찬은 소비기한 대신 "만든 날짜"를 넣으면 "N일째"로 표시돼요.</p>
         <p><b class="text-emerald-700">⚙ 보관장소 관리</b> — 냉장실/냉동실/실온 외에 김치냉장고처럼 우리집만의 보관장소를 자유롭게 추가·삭제할 수 있어요.</p>
-        <p><b class="text-emerald-700">정렬·보기 방식</b> — 목록 위 버튼으로 기한순/가나다순 정렬을 바꾸고, "간단히"를 누르면 카테고리·보관장소·날짜 없이 이름과 기한만 한 줄로 보여서 스크롤이 짧아져요.</p>
+        <p><b class="text-emerald-700">정렬·보기 방식</b> — 목록 위 버튼으로 기한순/가나다순 정렬을 바꾸고, "간단히"를 누르면 카테고리·보관장소·날짜 없이 이름과 기한만 한 줄로 보여서 스크롤이 짧아져요. "간단히" 모드에서도 기한 뱃지를 탭하면 그 재료만 카테고리·보관장소·기한을 바로 수정할 수 있어요.</p>
+        <p><b class="text-emerald-700">🏷️ 카테고리 필터</b> — 보관장소 탭 아래에 카테고리 칩이 떠요. 채소·고기처럼 카테고리를 눌러 그 종류만 골라볼 수 있어요.</p>
         <p><b class="text-emerald-700">뱃지 색깔</b> — 🔴 만료·오늘까지 🟠 3일 이내 🟡 7일 이내 🟢 여유 있음 ⚪ 기한 미설정</p>
         <p><b class="text-emerald-700">📋 레시피 찾기</b> — 재료 체크박스를 선택하고 "레시피 검색하기"를 누르면 재료가 복사되면서 네이버 검색이 바로 열려요.</p>
       </div>
@@ -154,7 +155,8 @@
           <h2 class="font-title text-lg text-emerald-700 flex items-center gap-1.5"><span>🧾</span> 보관 중인 재료 <span id="fridge-count" class="text-xs text-emerald-400">(0)</span></h2>
           <button onclick="toggleLocationManage()" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700 shrink-0">⚙ 보관장소 관리</button>
         </div>
-        <div id="location-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 mb-3"></div>
+        <div id="location-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 mb-2"></div>
+        <div id="category-tabs" class="hidden flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 mb-3"></div>
         <div id="location-manage" class="hidden bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3 mb-3 space-y-2">
           <p class="text-[11px] text-gray-500">냉장실, 냉동실, 김치냉장고, 실온 등 우리집에 맞게 보관장소를 자유롭게 추가·수정·삭제하세요.</p>
           <div id="location-manage-list" class="space-y-1.5"></div>
@@ -190,13 +192,24 @@
       </button>
       <div id="guide-shopping" class="hidden bg-white border-2 border-emerald-100 rounded-2xl p-4 text-xs text-gray-600 space-y-2.5 leading-relaxed">
         <p>냉장고 재고와는 별도로, "이번에 사야 할 것" 목록이에요.</p>
-        <p><b class="text-emerald-700">1.</b> 살 품목 이름을 입력하고 "추가"를 눌러요. 카테고리는 자동으로 분류돼요.</p>
+        <p><b class="text-emerald-700">🏬 진열대에서 골라 담기</b> — 펼치면 마트처럼 카테고리별 매대가 나와요. 카테고리를 고르고 품목을 탭하면 바로 목록에 담겨요.</p>
+        <p><b class="text-emerald-700">1.</b> 진열대에 없는 품목은 이름을 직접 입력하고 "추가"를 눌러요. 카테고리는 자동으로 분류돼요.</p>
         <p><b class="text-emerald-700">2.</b> 실제로 사면 체크박스를 눌러 구매완료로 표시해요.</p>
         <p><b class="text-emerald-700">3.</b> 상단 "🧊 냉장고로 담기"를 누르면 체크한 항목만 바로 냉장고에 담겨요. 소비기한·보관장소는 냉장고 탭에서 나중에 정해주면 돼요.</p>
       </div>
 
       <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
         <h2 class="font-title text-lg text-emerald-700 mb-3 flex items-center gap-1.5"><span>🛒</span> 장보기 목록</h2>
+
+        <button type="button" onclick="toggleShoppingShelf()" class="w-full flex items-center justify-between text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-xl px-3 py-2 mb-3 transition">
+          <span>🏬 진열대에서 골라 담기</span>
+          <span id="shopping-shelf-arrow">▸</span>
+        </button>
+        <div id="shopping-shelf" class="hidden mb-4">
+          <div id="shelf-category-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1.5 mb-2"></div>
+          <div id="shelf-items" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
         <div class="flex gap-2 mb-4">
           <input type="text" id="shopping-name" placeholder="살 품목 입력 (예: 두부)" onkeydown="if(event.key==='Enter'){event.preventDefault();addShoppingItem();}" class="flex-1 text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-emerald-50/30">
           <button onclick="addShoppingItem()" class="text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-4 rounded-xl transition active:scale-95">추가</button>
@@ -393,8 +406,10 @@
     let storageLocations = []; // {id, name} — customizable per household (냉장실/냉동실/김치냉장고/실온...)
     let pendingItems = [];     // items awaiting confirmation before entering the fridge (from OCR or shopping list)
     let activeLocationFilter = null; // null = show all locations
+    let activeCategoryFilter = null; // null = show all categories
     let fridgeSortMode = localStorage.getItem('fridge_sort_mode_v1') || 'expiry'; // 'expiry' | 'name'
     let fridgeViewMode = localStorage.getItem('fridge_view_mode_v1') || 'detailed'; // 'detailed' | 'compact'
+    let expandedFridgeItems = new Set(); // item ids temporarily showing full edit row in compact view
 
     // Family real-time sync (optional, via Firebase Firestore — configured per-device in the settings modal)
     let familySyncConfig = null; // {firebaseConfig, groupId}
@@ -726,6 +741,30 @@
     function setLocationFilter(id) {
       activeLocationFilter = id;
       renderLocationTabs();
+      renderFridgeList();
+    }
+
+    function renderCategoryTabs() {
+      const wrap = document.getElementById('category-tabs');
+      if (!wrap) return;
+      const base = activeLocationFilter ? fridgeItems.filter(i => i.location === activeLocationFilter) : fridgeItems;
+      const present = new Set(base.map(i => i.category || '기타'));
+      if (activeCategoryFilter && !present.has(activeCategoryFilter)) activeCategoryFilter = null;
+      const cats = CATEGORY_LIST.filter(c => present.has(c.name));
+      if (cats.length <= 1) { wrap.innerHTML = ''; wrap.classList.add('hidden'); return; }
+      wrap.classList.remove('hidden');
+      const chips = [{ name: null, emoji: '', label: '전체' }, ...cats];
+      wrap.innerHTML = chips.map(c => {
+        const active = activeCategoryFilter === c.name;
+        const arg = c.name === null ? 'null' : `'${c.name}'`;
+        const label = c.name === null ? c.label : `${c.emoji} ${c.name}`;
+        return `<button onclick="setCategoryFilter(${arg})" class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">${label}</button>`;
+      }).join('');
+    }
+
+    function setCategoryFilter(name) {
+      activeCategoryFilter = name;
+      renderCategoryTabs();
       renderFridgeList();
     }
 
@@ -1078,7 +1117,11 @@
 
     function renderFridgeList() {
       const container = document.getElementById('fridge-list');
-      const base = activeLocationFilter ? fridgeItems.filter(i => i.location === activeLocationFilter) : fridgeItems;
+      renderCategoryTabs();
+      const base = fridgeItems.filter(i =>
+        (!activeLocationFilter || i.location === activeLocationFilter) &&
+        (!activeCategoryFilter || (i.category || '기타') === activeCategoryFilter)
+      );
       const sorted = [...base].sort((a, b) => {
         if (fridgeSortMode === 'name') return a.name.localeCompare(b.name, 'ko');
         const da = a.expiry ? dDayInfo(a.expiry).days : Infinity;
@@ -1089,12 +1132,14 @@
       updateFridgeToolbarUI();
 
       if (sorted.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🧺</span><p class="text-xs mt-2">${fridgeItems.length === 0 ? '냉장고가 비어있어요. 영수증을 스캔하거나 직접 추가해보세요!' : '이 보관장소에는 재료가 없어요.'}</p></div>`;
+        container.innerHTML = `<div class="text-center py-8 text-gray-400"><span class="text-3xl">🧺</span><p class="text-xs mt-2">${fridgeItems.length === 0 ? '냉장고가 비어있어요. 영수증을 스캔하거나 직접 추가해보세요!' : '조건에 맞는 재료가 없어요.'}</p></div>`;
       } else {
         container.innerHTML = sorted.map(item => {
           const d = dDayInfo(item.expiry);
           const compact = fridgeViewMode === 'compact';
-          const metaRow = compact ? '' : `
+          const expanded = expandedFridgeItems.has(item.id);
+          const showMeta = !compact || expanded;
+          const metaRow = !showMeta ? '' : `
             <div class="flex flex-wrap items-center gap-1.5 pl-6">
               <select onchange="updateItemField('${item.id}','category',this.value)" class="text-[10px] border border-gray-200 rounded-lg px-1.5 py-1 bg-white text-gray-500">
                 ${categoryOptionsHtml(item.category)}
@@ -1114,11 +1159,11 @@
               </span>
             </div>`;
           return `
-          <div class="p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition ${compact ? '' : 'space-y-1.5'}">
+          <div class="p-2.5 rounded-xl border ${item.checked ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50/60 border-gray-100'} transition ${!showMeta ? '' : 'space-y-1.5'}">
             <div class="flex items-center gap-2">
               <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleItemCheck('${item.id}')" class="w-4.5 h-4.5 accent-emerald-500 cursor-pointer shrink-0">
               <input type="text" value="${escapeHtml(item.name)}" onchange="updateItemField('${item.id}','name',this.value)" class="flex-1 min-w-0 text-sm font-medium bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-emerald-400 focus:outline-none px-0 py-0.5">
-              <span class="text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${d.cls}">${d.label}</span>
+              <button type="button" onclick="toggleFridgeItemExpand('${item.id}')" class="text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${d.cls}" title="탭해서 카테고리·보관장소·기한 수정">${d.label}</button>
               <button onclick="deleteFridgeItem('${item.id}')" class="text-gray-300 hover:text-red-500 text-sm px-1 shrink-0">✕</button>
             </div>${metaRow}
           </div>`;
@@ -1140,6 +1185,12 @@
     function toggleItemCheck(id) {
       const item = fridgeItems.find(i => i.id === id);
       if (item) { item.checked = !item.checked; saveFridge(); renderFridgeList(); }
+    }
+
+    function toggleFridgeItemExpand(id) {
+      if (expandedFridgeItems.has(id)) expandedFridgeItems.delete(id);
+      else expandedFridgeItems.add(id);
+      renderFridgeList();
     }
 
     function updateExpiry(id, value) {
@@ -1181,16 +1232,54 @@
     }
 
     /* ===================== 장보기 목록 ===================== */
+    function addShoppingItemDirect(name, category) {
+      shoppingList.push({ id: uid(), name, category: category || autoClassifyCategory(name), addedAt: toISODate(new Date()), checked: false });
+      saveShopping();
+      renderShoppingList();
+      showToast(`'${name}' 장보기 목록에 담았어요! 🛒`);
+    }
+
     function addShoppingItem() {
       const input = document.getElementById('shopping-name');
       const name = input.value.trim();
       if (!name) { showToast('품목명을 입력해주세요.'); return; }
-      shoppingList.push({ id: uid(), name, category: autoClassifyCategory(name), addedAt: toISODate(new Date()), checked: false });
-      saveShopping();
+      addShoppingItemDirect(name);
       input.value = '';
       input.focus();
-      renderShoppingList();
-      showToast(`'${name}' 장보기 목록에 담았어요! 🛒`);
+    }
+
+    let activeShelfCategory = CATEGORY_LIST[0].name;
+
+    function toggleShoppingShelf() {
+      const wrap = document.getElementById('shopping-shelf');
+      const arrow = document.getElementById('shopping-shelf-arrow');
+      wrap.classList.toggle('hidden');
+      arrow.textContent = wrap.classList.contains('hidden') ? '▸' : '▾';
+      if (!wrap.classList.contains('hidden')) renderShoppingShelf();
+    }
+
+    function renderShoppingShelf() {
+      const tabs = document.getElementById('shelf-category-tabs');
+      tabs.innerHTML = CATEGORY_LIST.map(c => {
+        const active = c.name === activeShelfCategory;
+        return `<button type="button" onclick="setShelfCategory('${c.name}')" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">${c.emoji} ${c.name}</button>`;
+      }).join('');
+      const items = document.getElementById('shelf-items');
+      const keywords = CATEGORY_KEYWORDS[activeShelfCategory] || [];
+      if (keywords.length === 0) {
+        items.innerHTML = `<span class="text-[11px] text-gray-400">이 진열대엔 미리 담아둔 품목이 없어요. 아래에 직접 입력해주세요.</span>`;
+      } else {
+        items.innerHTML = keywords.map(k => `<button type="button" onclick="addShelfItem('${escapeAttr(k)}')" class="text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-full transition active:scale-95">+ ${escapeHtml(k)}</button>`).join('');
+      }
+    }
+
+    function setShelfCategory(name) {
+      activeShelfCategory = name;
+      renderShoppingShelf();
+    }
+
+    function addShelfItem(name) {
+      addShoppingItemDirect(name, activeShelfCategory);
     }
 
     function toggleShoppingCheck(id) {
