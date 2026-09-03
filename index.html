@@ -197,7 +197,7 @@
       </button>
       <div id="guide-shopping" class="hidden bg-white border-2 border-emerald-100 rounded-2xl p-4 text-xs text-gray-600 space-y-2.5 leading-relaxed">
         <p>냉장고 재고와는 별도로, "이번에 사야 할 것" 목록이에요.</p>
-        <p><b class="text-emerald-700">🏬 진열대에서 골라 담기</b> — 펼치면 마트 매대처럼 카테고리별로 쭉 진열돼요. 위쪽 칩을 누르면 그 매대로 바로 스크롤되고, 품목을 탭하면 바로 목록에 담겨요.</p>
+        <p><b class="text-emerald-700">🏬 진열대에서 골라 담기</b> — 펼치면 마트처럼 카테고리별 매대가 나와요. 카테고리를 고르고 품목을 탭하면 바로 목록에 담겨요.</p>
         <p><b class="text-emerald-700">1.</b> 진열대에 없는 품목은 이름을 직접 입력하고 "추가"를 눌러요. 카테고리는 자동으로 분류돼요.</p>
         <p><b class="text-emerald-700">2.</b> 실제로 사면 체크박스를 눌러 구매완료로 표시해요. "전체선택"을 누르면 담긴 품목을 한 번에 다 체크할 수 있어요.</p>
         <p><b class="text-emerald-700">3.</b> 상단 "🧊 냉장고로 담기"를 누르면 체크한 항목만 바로 냉장고에 담겨요. 소비기한·보관장소는 냉장고 탭에서 나중에 정해주면 돼요.</p>
@@ -210,9 +210,9 @@
           <span>🏬 진열대에서 골라 담기</span>
           <span id="shopping-shelf-arrow">▸</span>
         </button>
-        <div id="shopping-shelf" class="hidden mb-4 bg-gradient-to-b from-amber-50/70 to-transparent rounded-2xl p-2.5 border border-amber-100">
-          <div id="shelf-jump-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1.5 mb-3"></div>
-          <div id="shelf-aisles" class="space-y-5"></div>
+        <div id="shopping-shelf" class="hidden mb-4">
+          <div id="shelf-category-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1.5 mb-2"></div>
+          <div id="shelf-items" class="flex flex-wrap gap-1.5"></div>
         </div>
 
         <div class="flex gap-2 mb-4">
@@ -357,6 +357,8 @@
     </div>
 
   </main>
+
+  <button id="btn-scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" class="hidden fixed flex right-4 bottom-6 z-40 w-11 h-11 rounded-full bg-white text-emerald-600 border-2 border-emerald-200 shadow-lg text-lg items-center justify-center active:scale-90 transition" title="맨 위로">⬆️</button>
 
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/90 text-white text-xs px-4 py-2.5 rounded-full shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50 max-w-[90vw] text-center">
     <span id="toast-msg"></span>
@@ -1289,6 +1291,8 @@
       input.focus();
     }
 
+    let activeShelfCategory = CATEGORY_LIST[0].name;
+
     function toggleShoppingShelf() {
       const wrap = document.getElementById('shopping-shelf');
       const arrow = document.getElementById('shopping-shelf-arrow');
@@ -1298,41 +1302,27 @@
     }
 
     function renderShoppingShelf() {
-      const jump = document.getElementById('shelf-jump-tabs');
-      jump.innerHTML = CATEGORY_LIST.map((c, idx) => ({ c, idx }))
-        .filter(({ c }) => (CATEGORY_KEYWORDS[c.name] || []).length > 0)
-        .map(({ c, idx }) => `
-          <button type="button" onclick="scrollToAisle(${idx})" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50 transition">${c.emoji} ${c.name}</button>
-        `).join('');
-
-      const aisles = document.getElementById('shelf-aisles');
-      aisles.innerHTML = CATEGORY_LIST.map((c, idx) => {
-        const keywords = CATEGORY_KEYWORDS[c.name] || [];
-        if (keywords.length === 0) return '';
-        return `
-          <div id="aisle-${idx}" class="scroll-mt-24">
-            <div class="text-[11px] font-bold text-amber-800 mb-2 flex items-center gap-1"><span>${c.emoji}</span> ${c.name}</div>
-            <div class="relative pb-3.5">
-              <div class="flex flex-wrap gap-x-2 gap-y-3 relative z-10">
-                ${keywords.map(k => `
-                  <button type="button" onclick="addShelfItem('${escapeAttr(k)}','${c.name}')" class="flex flex-col items-center gap-1 w-14 shrink-0 active:scale-90 transition">
-                    <span class="w-11 h-11 flex items-center justify-center bg-white rounded-xl border border-amber-100 shadow-sm text-lg">${c.emoji}</span>
-                    <span class="text-[10px] text-gray-600 text-center leading-tight">${escapeHtml(k)}</span>
-                  </button>
-                `).join('')}
-              </div>
-              <div class="absolute left-0 right-0 bottom-0 h-3 rounded-sm bg-gradient-to-b from-amber-300 to-amber-600" style="box-shadow:0 4px 5px rgba(120,72,20,0.35)"></div>
-            </div>
-          </div>`;
+      const tabs = document.getElementById('shelf-category-tabs');
+      tabs.innerHTML = CATEGORY_LIST.map(c => {
+        const active = c.name === activeShelfCategory;
+        return `<button type="button" onclick="setShelfCategory('${c.name}')" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">${c.emoji} ${c.name}</button>`;
       }).join('');
+      const items = document.getElementById('shelf-items');
+      const keywords = CATEGORY_KEYWORDS[activeShelfCategory] || [];
+      if (keywords.length === 0) {
+        items.innerHTML = `<span class="text-[11px] text-gray-400">이 진열대엔 미리 담아둔 품목이 없어요. 아래에 직접 입력해주세요.</span>`;
+      } else {
+        items.innerHTML = keywords.map(k => `<button type="button" onclick="addShelfItem('${escapeAttr(k)}')" class="text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-full transition active:scale-95">+ ${escapeHtml(k)}</button>`).join('');
+      }
     }
 
-    function scrollToAisle(idx) {
-      document.getElementById('aisle-' + idx)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    function setShelfCategory(name) {
+      activeShelfCategory = name;
+      renderShoppingShelf();
     }
 
-    function addShelfItem(name, category) {
-      addShoppingItemDirect(name, category);
+    function addShelfItem(name) {
+      addShoppingItemDirect(name, activeShelfCategory);
     }
 
     function toggleSelectAllShopping() {
@@ -2217,6 +2207,11 @@
       switchTab('fridge');
       renderStarInput();
       if (familySyncConfig) initFamilySync();
+
+      const scrollTopBtn = document.getElementById('btn-scroll-top');
+      window.addEventListener('scroll', () => {
+        scrollTopBtn.classList.toggle('hidden', window.scrollY < 400);
+      }, { passive: true });
     });
   </script>
 </body>
