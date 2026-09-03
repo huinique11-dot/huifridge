@@ -84,6 +84,7 @@
         <p><b class="text-emerald-700">🏷️ 카테고리 필터</b> — 보관장소 탭 아래에 카테고리 칩이 떠요. 채소·고기처럼 카테고리를 눌러 그 종류만 골라볼 수 있어요.</p>
         <p><b class="text-emerald-700">뱃지 색깔</b> — 🔴 만료·오늘까지 🟠 3일 이내 🟡 7일 이내 🟢 여유 있음 ⚪ 기한 미설정</p>
         <p><b class="text-emerald-700">📋 레시피 찾기</b> — 재료 체크박스를 선택하고 "레시피 검색하기"를 누르면 재료가 복사되면서 네이버 검색이 바로 열려요.</p>
+        <p><b class="text-emerald-700">🔀 여러 개 한번에 옮기기</b> — 재료 체크박스를 여러 개 선택하면 "카테고리 일괄변경"·"보관장소 일괄변경" 드롭다운이 나와요. 골라놓은 재료들을 한 번에 다른 카테고리나 보관장소로 옮길 수 있어요.</p>
       </div>
 
       <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
@@ -165,9 +166,13 @@
             <button onclick="addStorageLocation()" class="text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 rounded-xl transition">추가</button>
           </div>
         </div>
-        <div class="flex gap-2 mb-3">
+        <div class="flex gap-2 mb-2">
           <button onclick="copySelectedItems()" id="btn-copy-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">📋 선택 재료 복사 (<span id="selected-count">0</span>)</button>
           <button onclick="searchRecipeForSelected()" id="btn-search-selected" disabled class="flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed">🔎 레시피 검색하기</button>
+        </div>
+        <div id="fridge-bulk-actions" class="hidden flex gap-2 mb-3">
+          <select id="bulk-category-select" onchange="bulkUpdateCategory(this.value)" class="flex-1 text-[11px] px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/40 text-emerald-700 font-semibold"></select>
+          <select id="bulk-location-select" onchange="bulkUpdateLocation(this.value)" class="flex-1 text-[11px] px-2 py-2 border border-emerald-200 rounded-xl bg-emerald-50/40 text-emerald-700 font-semibold"></select>
         </div>
         <div class="flex items-center justify-between gap-2 mb-2">
           <div class="flex bg-gray-100 p-0.5 rounded-lg">
@@ -192,9 +197,9 @@
       </button>
       <div id="guide-shopping" class="hidden bg-white border-2 border-emerald-100 rounded-2xl p-4 text-xs text-gray-600 space-y-2.5 leading-relaxed">
         <p>냉장고 재고와는 별도로, "이번에 사야 할 것" 목록이에요.</p>
-        <p><b class="text-emerald-700">🏬 진열대에서 골라 담기</b> — 펼치면 마트처럼 카테고리별 매대가 나와요. 카테고리를 고르고 품목을 탭하면 바로 목록에 담겨요.</p>
+        <p><b class="text-emerald-700">🏬 진열대에서 골라 담기</b> — 펼치면 마트 매대처럼 카테고리별로 쭉 진열돼요. 위쪽 칩을 누르면 그 매대로 바로 스크롤되고, 품목을 탭하면 바로 목록에 담겨요.</p>
         <p><b class="text-emerald-700">1.</b> 진열대에 없는 품목은 이름을 직접 입력하고 "추가"를 눌러요. 카테고리는 자동으로 분류돼요.</p>
-        <p><b class="text-emerald-700">2.</b> 실제로 사면 체크박스를 눌러 구매완료로 표시해요.</p>
+        <p><b class="text-emerald-700">2.</b> 실제로 사면 체크박스를 눌러 구매완료로 표시해요. "전체선택"을 누르면 담긴 품목을 한 번에 다 체크할 수 있어요.</p>
         <p><b class="text-emerald-700">3.</b> 상단 "🧊 냉장고로 담기"를 누르면 체크한 항목만 바로 냉장고에 담겨요. 소비기한·보관장소는 냉장고 탭에서 나중에 정해주면 돼요.</p>
       </div>
 
@@ -205,9 +210,9 @@
           <span>🏬 진열대에서 골라 담기</span>
           <span id="shopping-shelf-arrow">▸</span>
         </button>
-        <div id="shopping-shelf" class="hidden mb-4">
-          <div id="shelf-category-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1.5 mb-2"></div>
-          <div id="shelf-items" class="flex flex-wrap gap-1.5"></div>
+        <div id="shopping-shelf" class="hidden mb-4 bg-gradient-to-b from-amber-50/70 to-transparent rounded-2xl p-2.5 border border-amber-100">
+          <div id="shelf-jump-tabs" class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1.5 mb-3"></div>
+          <div id="shelf-aisles" class="space-y-5"></div>
         </div>
 
         <div class="flex gap-2 mb-4">
@@ -215,7 +220,10 @@
           <button onclick="addShoppingItem()" class="text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-4 rounded-xl transition active:scale-95">추가</button>
         </div>
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-400 font-semibold">담긴 품목 <span id="shopping-count">(0)</span></span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400 font-semibold">담긴 품목 <span id="shopping-count">(0)</span></span>
+            <button onclick="toggleSelectAllShopping()" id="btn-select-all-shopping" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700">전체선택</button>
+          </div>
           <button onclick="sendCheckedShoppingToFridge()" id="btn-shopping-to-fridge" disabled class="text-xs font-bold bg-gray-100 text-gray-400 px-3 py-1.5 rounded-full transition disabled:cursor-not-allowed">🧊 냉장고로 담기 (<span id="shopping-checked-count">0</span>)</button>
         </div>
         <div id="shopping-list-container" class="space-y-2"></div>
@@ -330,12 +338,14 @@
       </button>
       <div id="guide-menu" class="hidden bg-white border-2 border-emerald-100 rounded-2xl p-4 text-xs text-gray-600 space-y-2.5 leading-relaxed">
         <p>집밥로그에 쌓인 기록을 요리 이름 기준으로 모아서, 평균 별점과 조리 횟수를 보여줘요. 집밥로그에서 사진을 넣었으면 여기에도 작게 같이 보여요.</p>
+        <p><b class="text-emerald-700">🔍 검색</b> — 메뉴가 많아지면 이름으로 바로 찾을 수 있어요.</p>
         <p><b class="text-emerald-700">⭐ 별점순 · 가 이름순 · 🏷️ 태그별</b> — 세 가지로 정렬할 수 있어요. 태그별로 보면 재료 태그를 눌러서 그 재료 들어간 요리만 걸러볼 수 있어요.</p>
-        <p><b class="text-emerald-700">🍳 오늘 기록하기 / 📝 계획에 추가</b> — 이미 만들어본 요리를 다시 만들 때, 이름·재료·링크를 새로 입력할 필요 없이 카드의 버튼으로 바로 기록하거나 계획에 추가할 수 있어요. 계획은 날짜를 골라서 이번 주·다음 달로도 잡을 수 있어요.</p>
+        <p><b class="text-emerald-700">🍳 오늘 기록하기 / 📝 계획에 추가</b> — 메뉴 이름을 탭하면 아래로 버튼이 펼쳐져요. 이미 만들어본 요리를 다시 만들 때, 이름·재료·링크를 새로 입력할 필요 없이 바로 기록하거나 계획에 추가할 수 있어요. 계획은 날짜를 골라서 이번 주·다음 달로도 잡을 수 있어요.</p>
       </div>
 
       <section class="bg-white rounded-3xl p-5 shadow-sm border-2 border-emerald-200 pop-in">
         <h2 class="font-title text-lg text-emerald-700 mb-3 flex items-center gap-1.5"><span>📖</span> 우리집 메뉴판</h2>
+        <input type="text" id="menu-search" placeholder="🔍 메뉴 이름 검색" oninput="renderMenuBoard()" class="w-full text-sm px-3 py-2 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-emerald-50/30 mb-3">
         <div class="flex bg-emerald-50 p-1 rounded-xl border border-emerald-100 mb-3">
           <button id="sort-btn-rating" onclick="setMenuSort('rating')" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">⭐ 별점순</button>
           <button id="sort-btn-name" onclick="setMenuSort('name')" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition">가 이름순</button>
@@ -1180,6 +1190,37 @@
           ? "flex-1 text-xs font-bold bg-gray-100 text-gray-400 py-2 rounded-xl transition disabled:cursor-not-allowed"
           : "flex-1 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-xl transition active:scale-95";
       });
+
+      const bulkBar = document.getElementById('fridge-bulk-actions');
+      if (selectedCount > 0) {
+        bulkBar.classList.remove('hidden');
+        document.getElementById('bulk-category-select').innerHTML =
+          `<option value="">🏷️ 카테고리 일괄변경 (${selectedCount})</option>` + categoryOptionsHtml('');
+        document.getElementById('bulk-location-select').innerHTML =
+          `<option value="">📦 보관장소 일괄변경 (${selectedCount})</option>` +
+          storageLocations.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+      } else {
+        bulkBar.classList.add('hidden');
+      }
+    }
+
+    function bulkUpdateCategory(value) {
+      if (!value) return;
+      const checked = fridgeItems.filter(i => i.checked);
+      checked.forEach(i => { i.category = value; i.checked = false; });
+      saveFridge();
+      showToast(`${checked.length}개 재료를 '${value}' 카테고리로 옮겼어요! 🏷️`);
+      renderFridgeList();
+    }
+
+    function bulkUpdateLocation(value) {
+      if (!value) return;
+      const loc = storageLocations.find(l => l.id === value);
+      const checked = fridgeItems.filter(i => i.checked);
+      checked.forEach(i => { i.location = value; i.checked = false; });
+      saveFridge();
+      showToast(`${checked.length}개 재료를 '${loc ? loc.name : ''}'(으)로 옮겼어요! 📦`);
+      renderFridgeList();
     }
 
     function toggleItemCheck(id) {
@@ -1248,8 +1289,6 @@
       input.focus();
     }
 
-    let activeShelfCategory = CATEGORY_LIST[0].name;
-
     function toggleShoppingShelf() {
       const wrap = document.getElementById('shopping-shelf');
       const arrow = document.getElementById('shopping-shelf-arrow');
@@ -1259,27 +1298,49 @@
     }
 
     function renderShoppingShelf() {
-      const tabs = document.getElementById('shelf-category-tabs');
-      tabs.innerHTML = CATEGORY_LIST.map(c => {
-        const active = c.name === activeShelfCategory;
-        return `<button type="button" onclick="setShelfCategory('${c.name}')" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition ${active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-200'}">${c.emoji} ${c.name}</button>`;
+      const jump = document.getElementById('shelf-jump-tabs');
+      jump.innerHTML = CATEGORY_LIST.map((c, idx) => ({ c, idx }))
+        .filter(({ c }) => (CATEGORY_KEYWORDS[c.name] || []).length > 0)
+        .map(({ c, idx }) => `
+          <button type="button" onclick="scrollToAisle(${idx})" class="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50 transition">${c.emoji} ${c.name}</button>
+        `).join('');
+
+      const aisles = document.getElementById('shelf-aisles');
+      aisles.innerHTML = CATEGORY_LIST.map((c, idx) => {
+        const keywords = CATEGORY_KEYWORDS[c.name] || [];
+        if (keywords.length === 0) return '';
+        return `
+          <div id="aisle-${idx}" class="scroll-mt-24">
+            <div class="text-[11px] font-bold text-amber-800 mb-2 flex items-center gap-1"><span>${c.emoji}</span> ${c.name}</div>
+            <div class="relative pb-3.5">
+              <div class="flex flex-wrap gap-x-2 gap-y-3 relative z-10">
+                ${keywords.map(k => `
+                  <button type="button" onclick="addShelfItem('${escapeAttr(k)}','${c.name}')" class="flex flex-col items-center gap-1 w-14 shrink-0 active:scale-90 transition">
+                    <span class="w-11 h-11 flex items-center justify-center bg-white rounded-xl border border-amber-100 shadow-sm text-lg">${c.emoji}</span>
+                    <span class="text-[10px] text-gray-600 text-center leading-tight">${escapeHtml(k)}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <div class="absolute left-0 right-0 bottom-0 h-3 rounded-sm bg-gradient-to-b from-amber-300 to-amber-600" style="box-shadow:0 4px 5px rgba(120,72,20,0.35)"></div>
+            </div>
+          </div>`;
       }).join('');
-      const items = document.getElementById('shelf-items');
-      const keywords = CATEGORY_KEYWORDS[activeShelfCategory] || [];
-      if (keywords.length === 0) {
-        items.innerHTML = `<span class="text-[11px] text-gray-400">이 진열대엔 미리 담아둔 품목이 없어요. 아래에 직접 입력해주세요.</span>`;
-      } else {
-        items.innerHTML = keywords.map(k => `<button type="button" onclick="addShelfItem('${escapeAttr(k)}')" class="text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-full transition active:scale-95">+ ${escapeHtml(k)}</button>`).join('');
-      }
     }
 
-    function setShelfCategory(name) {
-      activeShelfCategory = name;
-      renderShoppingShelf();
+    function scrollToAisle(idx) {
+      document.getElementById('aisle-' + idx)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function addShelfItem(name) {
-      addShoppingItemDirect(name, activeShelfCategory);
+    function addShelfItem(name, category) {
+      addShoppingItemDirect(name, category);
+    }
+
+    function toggleSelectAllShopping() {
+      if (shoppingList.length === 0) return;
+      const allChecked = shoppingList.every(i => i.checked);
+      shoppingList.forEach(i => { i.checked = !allChecked; });
+      saveShopping();
+      renderShoppingList();
     }
 
     function toggleShoppingCheck(id) {
@@ -1324,6 +1385,14 @@
       btn.className = checkedCount === 0
         ? "text-xs font-bold bg-gray-100 text-gray-400 px-3 py-1.5 rounded-full transition disabled:cursor-not-allowed"
         : "text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-full transition active:scale-95";
+
+      const selectAllBtn = document.getElementById('btn-select-all-shopping');
+      const allChecked = shoppingList.length > 0 && checkedCount === shoppingList.length;
+      selectAllBtn.textContent = allChecked ? '선택해제' : '전체선택';
+      selectAllBtn.disabled = shoppingList.length === 0;
+      selectAllBtn.className = shoppingList.length === 0
+        ? "text-[11px] font-bold text-gray-300 cursor-not-allowed"
+        : "text-[11px] font-bold text-emerald-500 hover:text-emerald-700";
     }
 
     function sendCheckedShoppingToFridge() {
@@ -1909,6 +1978,7 @@
     /* ===================== 메뉴판 ===================== */
     let menuSortMode = 'rating';
     let menuTagFilter = null;
+    let expandedMenuNames = new Set();
 
     function setMenuSort(mode) {
       menuSortMode = mode;
@@ -2010,6 +2080,9 @@
         filtered = filtered.filter(m => m.tags.includes(menuTagFilter));
       }
 
+      const query = (document.getElementById('menu-search')?.value || '').trim().toLowerCase();
+      if (query) filtered = filtered.filter(m => m.name.toLowerCase().includes(query));
+
       if (menuSortMode === 'rating') {
         filtered = [...filtered].sort((a, b) => b.avgRating - a.avgRating || a.name.localeCompare(b.name, 'ko'));
       } else {
@@ -2017,15 +2090,17 @@
       }
 
       if (filtered.length === 0) {
-        list.innerHTML = `<div class="text-center py-6 text-gray-400"><p class="text-xs">해당 태그의 메뉴가 없어요.</p></div>`;
+        list.innerHTML = `<div class="text-center py-6 text-gray-400"><p class="text-xs">${query ? '검색 결과가 없어요.' : '해당 태그의 메뉴가 없어요.'}</p></div>`;
         return;
       }
 
-      list.innerHTML = filtered.map(m => `
+      list.innerHTML = filtered.map(m => {
+        const expanded = expandedMenuNames.has(m.name);
+        return `
         <div class="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-3 space-y-1.5">
-          <div class="flex items-start justify-between gap-2">
+          <div class="flex items-start justify-between gap-2 cursor-pointer" onclick="toggleMenuExpand('${escapeAttr(m.name)}')">
             <div class="min-w-0">
-              <div class="font-bold text-sm text-gray-800">${escapeHtml(m.name)}</div>
+              <div class="font-bold text-sm text-gray-800 flex items-center gap-1">${escapeHtml(m.name)} <span class="text-gray-300 text-[10px]">${expanded ? '▾' : '▸'}</span></div>
               <div class="text-xs">${renderStars(Math.round(m.avgRating))} <span class="text-gray-400 text-[10px]">(${m.avgRating.toFixed(1)} · ${m.count}회 조리)</span></div>
             </div>
             ${m.photo ? `<img src="${m.photo}" class="w-12 h-12 rounded-xl object-cover border border-emerald-200 shrink-0">` : ''}
@@ -2035,12 +2110,20 @@
             <span class="text-[10px] text-gray-400">최근 조리: ${m.lastDate}</span>
             ${m.link ? `<a href="${escapeAttr(m.link)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-emerald-600 underline">🔗 레시피 보기</a>` : ''}
           </div>
+          ${expanded ? `
           <div class="flex gap-1.5 pt-1">
             <button onclick="quickLogFromMenu('${escapeAttr(m.name)}')" class="flex-1 text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-full transition active:scale-95">🍳 오늘 기록하기</button>
             <button onclick="quickPlanFromMenu('${escapeAttr(m.name)}')" class="flex-1 text-[11px] font-bold bg-sky-100 hover:bg-sky-200 text-sky-700 py-1.5 rounded-full transition active:scale-95">📝 계획에 추가</button>
-          </div>
+          </div>` : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
+    }
+
+    function toggleMenuExpand(name) {
+      if (expandedMenuNames.has(name)) expandedMenuNames.delete(name);
+      else expandedMenuNames.add(name);
+      renderMenuBoard();
     }
 
     function setMenuTagFilter(tag) {
